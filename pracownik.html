@@ -1,0 +1,283 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>System Urlopowy – Moje wnioski</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+  <style>
+    .navbar { background: #1976D2; }
+    .badge-pending  { background: #FF9800; }
+    .badge-approved { background: #4CAF50; }
+    .badge-rejected { background: #F44336; }
+    .table td { vertical-align: middle; }
+    .stat-card { border: none; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,.08); }
+    .stat-num  { font-size: 2rem; font-weight: 700; }
+  </style>
+</head>
+<body class="bg-light">
+  <nav class="navbar navbar-dark px-4 py-3 d-flex justify-content-between">
+    <span class="navbar-brand mb-0 h5">System Urlopowy</span>
+    <div>
+      <span id="navUser" class="text-white me-3"></span>
+      <button class="btn btn-outline-light btn-sm" onclick="logout()">Wyloguj</button>
+    </div>
+  </nav>
+
+  <div class="container mt-4">
+
+    <!-- Saldo urlopowe -->
+    <div class="row g-3 mb-4" id="statsRow">
+      <div class="col-6 col-md-3">
+        <div class="card stat-card p-3 text-center">
+          <div class="text-muted small mb-1">Urlop w tym roku</div>
+          <div class="stat-num text-primary" id="statWymiar">–</div>
+          <div class="text-muted small">dni</div>
+        </div>
+      </div>
+      <div class="col-6 col-md-3">
+        <div class="card stat-card p-3 text-center">
+          <div class="text-muted small mb-1">Zaległy urlop</div>
+          <div class="stat-num text-info" id="statZalegly">–</div>
+          <div class="text-muted small">dni</div>
+        </div>
+      </div>
+      <div class="col-6 col-md-3">
+        <div class="card stat-card p-3 text-center">
+          <div class="text-muted small mb-1">Wykorzystano</div>
+          <div class="stat-num text-warning" id="statUzyte">–</div>
+          <div class="text-muted small">dni</div>
+        </div>
+      </div>
+      <div class="col-6 col-md-3">
+        <div class="card stat-card p-3 text-center">
+          <div class="text-muted small mb-1">Pozostało</div>
+          <div class="stat-num" id="statPozostalo">–</div>
+          <div class="text-muted small">dni</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Przyciski i alerty -->
+    <div class="d-flex justify-content-between align-items-center mb-3">
+      <h5 class="mb-0">Moje wnioski urlopowe</h5>
+      <button class="btn btn-success btn-sm" data-bs-toggle="modal" data-bs-target="#modalNewRequest">
+        + Nowy wniosek
+      </button>
+    </div>
+    <div id="alertMain" class="alert d-none mb-3"></div>
+
+    <!-- Tabela wniosków -->
+    <div class="card border-0 shadow-sm">
+      <div class="table-responsive">
+        <table class="table table-hover mb-0">
+          <thead class="table-light">
+            <tr>
+              <th>Typ urlopu</th>
+              <th>Od</th>
+              <th>Do</th>
+              <th>Dni</th>
+              <th>Powód</th>
+              <th>Status</th>
+              <th>Uwaga admina</th>
+            </tr>
+          </thead>
+          <tbody id="requestsTable"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: Nowy wniosek -->
+  <div class="modal fade" id="modalNewRequest" tabindex="-1">
+    <div class="modal-dialog">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title">Nowy wniosek urlopowy</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+          <div class="mb-3">
+            <label class="form-label">Rodzaj urlopu <span class="text-danger">*</span></label>
+            <select id="reqTyp" class="form-select"></select>
+            <div id="reqUnpaidWarn" class="alert d-none mt-2 mb-0"></div>
+          </div>
+          <div class="row mb-3">
+            <div class="col">
+              <label class="form-label">Data od <span class="text-danger">*</span></label>
+              <input type="date" id="reqStart" class="form-control">
+            </div>
+            <div class="col">
+              <label class="form-label">Data do <span class="text-danger">*</span></label>
+              <input type="date" id="reqEnd" class="form-control">
+            </div>
+          </div>
+          <div id="reqDaysInfo" class="alert alert-info py-2 d-none"></div>
+          <div class="mb-2">
+            <label class="form-label">Powód / uwagi <span class="text-muted small">(opcjonalne)</span></label>
+            <textarea id="reqReason" class="form-control" rows="3" placeholder="Opcjonalnie podaj powód..."></textarea>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button class="btn btn-secondary" data-bs-dismiss="modal">Anuluj</button>
+          <button class="btn btn-success" onclick="submitRequest()">Wyślij wniosek</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+  <script src="js/app.js"></script>
+  <script>
+    if (!localStorage.getItem('token')) window.location.href = 'index.html';
+    if (localStorage.getItem('userRole') === 'admin') window.location.href = 'admin.html';
+    document.getElementById('navUser').textContent = localStorage.getItem('userName') || '';
+
+    function logout() { localStorage.clear(); window.location.href = 'index.html'; }
+
+    function statusBadge(s) {
+      const m = { pending:['badge-pending','Oczekuje'], approved:['badge-approved','Zatwierdzone'], rejected:['badge-rejected','Odrzucone'] };
+      const [c, l] = m[s] || ['bg-secondary', s];
+      return `<span class="badge ${c}">${l}</span>`;
+    }
+
+    function fmtDate(d) { return d ? String(d).slice(0, 10) : '–'; }
+
+    function getEaster(y) {
+      const a=y%19,b=Math.floor(y/100),c=y%100,d=Math.floor(b/4),e=b%4,
+            f=Math.floor((b+8)/25),g=Math.floor((b-f+1)/3),
+            h=(19*a+b-d-g+15)%30,i=Math.floor(c/4),k=c%4,
+            l=(32+2*e+2*i-h-k)%7,m=Math.floor((a+11*h+22*l)/451),
+            mo=Math.floor((h+l-7*m+114)/31),dy=((h+l-7*m+114)%31)+1;
+      return new Date(Date.UTC(y,mo-1,dy));
+    }
+    function getHolidays(y) {
+      const add=(d,n)=>{const r=new Date(d);r.setUTCDate(r.getUTCDate()+n);return r.toISOString().slice(0,10);};
+      const e=getEaster(y);
+      return new Set([
+        `${y}-01-01`,`${y}-01-06`,`${y}-05-01`,`${y}-05-03`,
+        `${y}-08-15`,`${y}-11-01`,`${y}-11-11`,`${y}-12-25`,`${y}-12-26`,
+        e.toISOString().slice(0,10), add(e,1), add(e,49), add(e,60)
+      ]);
+    }
+    function countWorkingDays(a, b) {
+      if (!a || !b) return 0;
+      const s=new Date(fmtDate(a)), e=new Date(fmtDate(b));
+      const hols=new Set(); for(let y=s.getFullYear();y<=e.getFullYear();y++) getHolidays(y).forEach(h=>hols.add(h));
+      let n=0,c=new Date(s);
+      while(c<=e){const dw=c.getDay(),ds=c.toISOString().slice(0,10); if(dw&&dw!==6&&!hols.has(ds))n++; c.setDate(c.getDate()+1);}
+      return n;
+    }
+    function daysBetween(a, b) { return countWorkingDays(a, b); }
+
+    async function loadStats() {
+      const data = await API.getMe();
+      if (!data.success) return;
+      const u = data.data;
+      document.getElementById('statWymiar').textContent   = u.urlop_wymiar ?? 0;
+      document.getElementById('statZalegly').textContent  = u.urlop_zalegly ?? 0;
+      document.getElementById('statUzyte').textContent    = u.urlop_wykorzystany ?? 0;
+      const left = u.urlop_pozostalo ?? 0;
+      const el = document.getElementById('statPozostalo');
+      el.textContent = left;
+      el.className = `stat-num ${left === 0 ? 'text-danger' : left <= 3 ? 'text-warning' : 'text-success'}`;
+    }
+
+    async function loadRequests() {
+      const data = await API.getRequests();
+      if (!data.success) return;
+      const tbody = document.getElementById('requestsTable');
+      if (!data.data.length) {
+        tbody.innerHTML = '<tr><td colspan="7" class="text-center text-muted py-4">Nie złożyłeś jeszcze żadnego wniosku</td></tr>';
+        return;
+      }
+      tbody.innerHTML = data.data.map(r => `
+        <tr>
+          <td><span class="badge bg-info text-dark">${r.typ_urlopu || 'wypoczynkowy'}</span></td>
+          <td>${fmtDate(r.start_date)}</td>
+          <td>${fmtDate(r.end_date)}</td>
+          <td><strong>${daysBetween(r.start_date, r.end_date)}</strong></td>
+          <td>${r.reason || '<span class="text-muted">–</span>'}</td>
+          <td>${statusBadge(r.status)}</td>
+          <td>${r.admin_note || '<span class="text-muted">–</span>'}</td>
+        </tr>`).join('');
+    }
+
+    let leaveTypesData = [];
+
+    async function loadLeaveTypes() {
+      const data = await API.getLeaveTypes();
+      if (!data.success) return;
+      leaveTypesData = data.data;
+      const sel = document.getElementById('reqTyp');
+      sel.innerHTML = data.data
+        .filter(t => t.aktywny)
+        .map(t => `<option value="${t.kod}">${t.nazwa}${t.limit_dni ? ` (max ${t.limit_dni} dni/rok)` : ''}</option>`)
+        .join('');
+    }
+
+    document.getElementById('reqTyp').addEventListener('change', async () => {
+      const kod = document.getElementById('reqTyp').value;
+      const typ = leaveTypesData.find(t => t.kod === kod);
+      const warn = document.getElementById('reqUnpaidWarn');
+      if (typ && typ.platny === false) {
+        const me = await API.getMe();
+        if (me.success && me.data.urlop_pozostalo > 0) {
+          warn.className = 'alert alert-warning py-2 small';
+          warn.textContent = `Uwaga: masz jeszcze ${me.data.urlop_pozostalo} dni urlopu wypoczynkowego. Urlop bezpłatny możesz wziąć dopiero po jego wyczerpaniu.`;
+        } else {
+          warn.className = 'alert d-none';
+        }
+      } else {
+        warn.className = 'alert d-none';
+      }
+    });
+
+    // Podgląd liczby dni przy wyborze dat
+    ['reqStart', 'reqEnd'].forEach(id => {
+      document.getElementById(id).addEventListener('change', () => {
+        const s = document.getElementById('reqStart').value;
+        const e = document.getElementById('reqEnd').value;
+        const info = document.getElementById('reqDaysInfo');
+        if (s && e && s <= e) {
+          const d = countWorkingDays(s, e);
+          info.className = 'alert alert-info py-2';
+          info.textContent = `Dni roboczych (bez weekendów i świąt): ${d}`;
+        } else if (s && e && s > e) {
+          info.className = 'alert alert-warning py-2';
+          info.textContent = 'Data końcowa musi być późniejsza niż startowa';
+        } else {
+          info.className = 'alert alert-info py-2 d-none';
+        }
+      });
+    });
+
+    async function submitRequest() {
+      const start  = document.getElementById('reqStart').value;
+      const end    = document.getElementById('reqEnd').value;
+      const typ    = document.getElementById('reqTyp').value;
+      const reason = document.getElementById('reqReason').value.trim();
+      if (!start || !end) return alert('Podaj daty urlopu');
+      if (start > end)   return alert('Data końcowa musi być po startowej');
+
+      const data = await API.createRequest(start, end, typ, reason);
+      bootstrap.Modal.getInstance(document.getElementById('modalNewRequest')).hide();
+      const alertEl = document.getElementById('alertMain');
+      alertEl.className = `alert alert-${data.success ? 'success' : 'danger'}`;
+      alertEl.textContent = data.message || (data.success ? 'Wniosek złożony' : 'Błąd');
+      setTimeout(() => { alertEl.className = 'alert d-none'; }, 5000);
+      if (data.success) { loadRequests(); loadStats(); }
+    }
+
+    // Ustaw minimalną datę na dziś
+    const _td = new Date();
+    const today = `${_td.getFullYear()}-${String(_td.getMonth()+1).padStart(2,'0')}-${String(_td.getDate()).padStart(2,'0')}`;
+    document.getElementById('reqStart').min = today;
+    document.getElementById('reqEnd').min   = today;
+
+    loadStats();
+    loadRequests();
+    loadLeaveTypes();
+  </script>
+</body>
+</html>

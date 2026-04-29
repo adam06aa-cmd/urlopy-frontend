@@ -1,0 +1,1748 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Panel Administratora – System Urlopowy</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+  <style>
+    .navbar { background: #1976D2; }
+    .badge-pending  { background: #FF9800; }
+    .badge-approved { background: #4CAF50; }
+    .badge-rejected { background: #F44336; }
+    .tab-content { padding-top: 20px; }
+    .table td { vertical-align: middle; }
+    .urlop-bar { height: 8px; border-radius: 4px; background: #e9ecef; overflow: hidden; min-width: 80px; }
+    .urlop-bar-fill { height: 100%; background: #4CAF50; transition: width .3s; }
+    .urlop-bar-fill.warning { background: #FF9800; }
+    .urlop-bar-fill.danger  { background: #F44336; }
+  </style>
+</head>
+<body>
+  <nav class="navbar navbar-dark px-4 py-3 d-flex justify-content-between">
+    <span class="navbar-brand mb-0 h5">System Urlopowy</span>
+    <div>
+      <span id="navUser" class="text-white me-3"></span>
+      <button class="btn btn-outline-light btn-sm" onclick="logout()">Wyloguj</button>
+    </div>
+  </nav>
+
+  <div class="container mt-4">
+    <ul class="nav nav-tabs" id="mainTabs">
+      <li class="nav-item">
+        <a class="nav-link active" data-bs-toggle="tab" href="#tabRequests">
+          Wnioski <span id="badgePending" class="badge bg-warning ms-1">0</span>
+        </a>
+      </li>
+      <li class="nav-item">
+        <a class="nav-link" data-bs-toggle="tab" href="#tabEmployees">Pracownicy</a>
+      </li>
+      <li class="nav-item">
+        <a class="nav-link" data-bs-toggle="tab" href="#tabCalendar">Kalendarz</a>
+      </li>
+      <li class="nav-item">
+        <a class="nav-link" data-bs-toggle="tab" href="#tabReport">Zestawienie</a>
+      </li>
+      <li class="nav-item">
+        <a class="nav-link" data-bs-toggle="tab" href="#tabSettings">Ustawienia</a>
+      </li>
+    </ul>
+
+    <div class="tab-content">
+
+      <!-- ===== WNIOSKI ===== -->
+      <div class="tab-pane fade show active" id="tabRequests">
+        <div class="d-flex justify-content-between align-items-center mb-3">
+          <h5 class="mb-0">Wnioski urlopowe</h5>
+          <div class="d-flex gap-2 align-items-center">
+            <select id="filterStatus" class="form-select form-select-sm w-auto">
+              <option value="">Wszystkie</option>
+              <option value="pending">Oczekujące</option>
+              <option value="approved">Zatwierdzone</option>
+              <option value="rejected">Odrzucone</option>
+            </select>
+            <button class="btn btn-primary btn-sm" onclick="loadRequests()">Odśwież</button>
+            <button class="btn btn-success btn-sm" onclick="openAdminAddRequest()">+ Dodaj urlop</button>
+          </div>
+        </div>
+        <div id="alertRequests" class="alert d-none"></div>
+        <div class="table-responsive">
+          <table class="table table-hover">
+            <thead class="table-light">
+              <tr>
+                <th>Pracownik</th>
+                <th>Typ urlopu</th>
+                <th>Od</th>
+                <th>Do</th>
+                <th>Dni</th>
+                <th>Powód</th>
+                <th>Status</th>
+                <th>Uwaga admina</th>
+                <th>Akcje</th>
+              </tr>
+            </thead>
+            <tbody id="requestsTable"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- ===== PRACOWNICY ===== -->
+      <div class="tab-pane fade" id="tabEmployees">
+        <div class="d-flex justify-content-between align-items-center mb-3">
+          <h5 class="mb-0">Pracownicy</h5>
+          <div class="d-flex gap-2 align-items-center">
+            <div class="form-check form-switch mb-0">
+              <input class="form-check-input" type="checkbox" id="toggleZwolnieni" onchange="loadUsers()">
+              <label class="form-check-label small text-muted" for="toggleZwolnieni">Pokaż zwolnionych</label>
+            </div>
+            <button class="btn btn-success btn-sm" data-bs-toggle="modal" data-bs-target="#modalAddUser">
+              + Dodaj pracownika
+            </button>
+          </div>
+        </div>
+        <div id="alertUsers" class="alert d-none"></div>
+        <div class="table-responsive">
+          <table class="table table-hover">
+            <thead class="table-light">
+              <tr>
+                <th>Imię i nazwisko</th>
+                <th>Stanowisko</th>
+                <th>Login</th>
+                <th>Email</th>
+                <th>Etat</th>
+                <th>Urlop w tym roku</th>
+                <th>Zaległy</th>
+                <th>Wykorzystano</th>
+                <th>Pozostało</th>
+                <th>Badania lekarskie</th>
+                <th>Akcje</th>
+              </tr>
+            </thead>
+            <tbody id="usersTable"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- ===== KALENDARZ ===== -->
+      <div class="tab-pane fade" id="tabCalendar">
+        <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+          <h5 class="mb-0">Kalendarz urlopów</h5>
+          <div class="d-flex align-items-center gap-2 flex-wrap">
+            <select id="calFilterStanowisko" class="form-select form-select-sm w-auto" onchange="renderCalendar()">
+              <option value="">Wszystkie stanowiska</option>
+            </select>
+            <button class="btn btn-outline-secondary btn-sm" onclick="calPrev()">&#8249;</button>
+            <span id="calTitle" class="fw-semibold px-2" style="min-width:160px;text-align:center"></span>
+            <button class="btn btn-outline-secondary btn-sm" onclick="calNext()">&#8250;</button>
+            <button class="btn btn-outline-primary btn-sm ms-2" onclick="calGoToday()">Dziś</button>
+          </div>
+        </div>
+        <div id="calLegend" class="d-flex flex-wrap gap-2 mb-3"></div>
+        <div class="table-responsive" style="overflow-x:auto">
+          <table class="table table-bordered table-sm mb-0" id="calTable" style="min-width:700px;border-collapse:collapse">
+            <thead id="calHead"></thead>
+            <tbody id="calBody"></tbody>
+          </table>
+        </div>
+        <div class="mt-2 small text-muted">
+          <span class="me-3">&#9632; <span style="opacity:.45">Jasny kolor</span> = wniosek oczekujący</span>
+          <span>&#9632; <span>Pełny kolor</span> = zatwierdzony</span>
+        </div>
+      </div>
+
+      <!-- ===== ZESTAWIENIE ===== -->
+      <div class="tab-pane fade" id="tabReport">
+        <div class="d-flex flex-wrap justify-content-between align-items-center mb-3 gap-2">
+          <h5 class="mb-0">Zestawienie urlopów</h5>
+          <div class="d-flex align-items-center gap-2 flex-wrap">
+            <button class="btn btn-outline-secondary btn-sm" onclick="reportSetRange('month')">Ten miesiąc</button>
+            <button class="btn btn-outline-secondary btn-sm" onclick="reportSetRange('quarter')">Ten kwartał</button>
+            <button class="btn btn-outline-secondary btn-sm" onclick="reportSetRange('half')">Pół roku</button>
+            <button class="btn btn-outline-secondary btn-sm" onclick="reportSetRange('year')">Cały rok</button>
+          </div>
+        </div>
+        <div class="d-flex align-items-center gap-2 mb-3 flex-wrap">
+          <label class="form-label mb-0">Od</label>
+          <input type="date" id="reportFrom" class="form-control form-control-sm" style="width:160px">
+          <label class="form-label mb-0">Do</label>
+          <input type="date" id="reportTo" class="form-control form-control-sm" style="width:160px">
+          <button class="btn btn-primary btn-sm" onclick="loadReport()">Pokaż</button>
+          <button class="btn btn-success btn-sm" onclick="exportReportXLSX()">&#11015; Pobierz XLSX</button>
+        </div>
+        <div id="alertReport" class="alert d-none"></div>
+        <div class="table-responsive">
+          <table class="table table-bordered table-hover table-sm" id="reportTable">
+            <thead id="reportHead" class="table-light"></thead>
+            <tbody id="reportBody"></tbody>
+            <tfoot id="reportFoot" class="table-secondary fw-bold"></tfoot>
+          </table>
+        </div>
+      </div>
+
+      <!-- ===== USTAWIENIA ===== -->
+      <div class="tab-pane fade" id="tabSettings">
+        <div class="row g-4">
+          <div class="col-12">
+            <div class="card">
+              <div class="card-header d-flex justify-content-between align-items-center">
+                <h6 class="mb-0">Rodzaje urlopów</h6>
+                <button class="btn btn-success btn-sm" onclick="openAddLeaveType()">+ Dodaj rodzaj</button>
+              </div>
+              <div class="card-body p-0">
+                <div id="alertSettings" class="alert d-none m-3"></div>
+                <div class="table-responsive">
+                  <table class="table table-hover mb-0">
+                    <thead class="table-light">
+                      <tr>
+                        <th>Nazwa</th>
+                        <th>Kod</th>
+                        <th>Opis</th>
+                        <th>Płatny</th>
+                        <th>Wlicza w podstawę</th>
+                        <th>Limit dni</th>
+                        <th>Aktywny</th>
+                        <th>Akcje</th>
+                      </tr>
+                    </thead>
+                    <tbody id="leaveTypesTable"></tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ===== MODAL: Decyzja o wniosku ===== -->
+  <div class="modal fade" id="modalReview" tabindex="-1">
+    <div class="modal-dialog">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title" id="modalReviewTitle">Decyzja</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+          <p id="modalReviewInfo"></p>
+          <label class="form-label">Opcjonalna uwaga dla pracownika</label>
+          <textarea id="modalReviewNote" class="form-control" rows="3"></textarea>
+        </div>
+        <div class="modal-footer">
+          <button class="btn btn-secondary" data-bs-dismiss="modal">Anuluj</button>
+          <button id="modalReviewBtn" class="btn btn-primary">Potwierdź</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== MODAL: Dodaj pracownika ===== -->
+  <div class="modal fade" id="modalAddUser" tabindex="-1">
+    <div class="modal-dialog">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title">Dodaj pracownika</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+          <div class="mb-2">
+            <label class="form-label">Imię i nazwisko</label>
+            <input type="text" id="newUserName" class="form-control">
+          </div>
+          <div class="mb-2">
+            <label class="form-label">Email</label>
+            <input type="email" id="newUserEmail" class="form-control">
+          </div>
+          <div class="mb-2">
+            <label class="form-label">Login <span class="text-muted small">(do logowania, np. jkowalski)</span></label>
+            <input type="text" id="newUserLogin" class="form-control" placeholder="np. jkowalski">
+            <div class="form-text">Jeśli puste — pracownik loguje się emailem</div>
+          </div>
+          <div class="mb-2">
+            <label class="form-label">Hasło tymczasowe</label>
+            <div class="input-group">
+              <input type="password" id="newUserPassword" class="form-control">
+              <button class="btn btn-outline-secondary" type="button" onclick="togglePasswordVisibility('newUserPassword', this)" title="Pokaż/ukryj">&#x1F441;</button>
+            </div>
+          </div>
+          <div class="mb-2">
+            <label class="form-label">Stanowisko</label>
+            <input type="text" id="newUserStanowisko" class="form-control" placeholder="np. Trener, Recepcjonista">
+          </div>
+          <div class="mb-2">
+            <label class="form-label">Data zatrudnienia</label>
+            <input type="date" id="newUserDataZatrudnienia" class="form-control">
+          </div>
+          <div class="row mb-2">
+            <div class="col">
+              <label class="form-label">Badania lekarskie — data</label>
+              <input type="date" id="newUserDataBadan" class="form-control">
+            </div>
+            <div class="col">
+              <label class="form-label">Ważne do</label>
+              <input type="date" id="newUserWaznoscBadan" class="form-control">
+            </div>
+          </div>
+          <hr>
+          <div class="mb-2">
+            <label class="form-label">Wymiar etatu</label>
+            <select id="newUserEtat" class="form-select" onchange="autoFillDays('newUserEtat','newUserWymiar')">
+              <option value="1">Cały etat (1/1)</option>
+              <option value="3/4">3/4 etatu</option>
+              <option value="1/2">1/2 etatu</option>
+              <option value="1/4">1/4 etatu</option>
+            </select>
+          </div>
+          <div class="row">
+            <div class="col">
+              <label class="form-label">Urlop w tym roku (dni)</label>
+              <input type="number" id="newUserWymiar" class="form-control" value="26" min="0">
+            </div>
+            <div class="col">
+              <label class="form-label">Zaległy urlop (dni)</label>
+              <input type="number" id="newUserZalegly" class="form-control" value="0" min="0">
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button class="btn btn-secondary" data-bs-dismiss="modal">Anuluj</button>
+          <button class="btn btn-success" onclick="createUser()">Utwórz konto</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== MODAL: Edytuj pracownika ===== -->
+  <div class="modal fade" id="modalEditUser" tabindex="-1">
+    <div class="modal-dialog">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title">Edytuj pracownika — <span id="editUserTitle"></span></h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+          <h6 class="text-muted mb-3">Dane konta</h6>
+          <div class="mb-2">
+            <label class="form-label">Imię i nazwisko <span class="text-danger">*</span></label>
+            <input type="text" id="editUserName" class="form-control">
+          </div>
+          <div class="mb-2">
+            <label class="form-label">Email <span class="text-danger">*</span></label>
+            <input type="email" id="editUserEmail" class="form-control">
+          </div>
+          <div class="mb-2">
+            <label class="form-label">Login <span class="text-muted small">(do logowania)</span></label>
+            <input type="text" id="editUserLogin" class="form-control" placeholder="np. jkowalski">
+          </div>
+          <div class="mb-2">
+            <label class="form-label">Stanowisko</label>
+            <input type="text" id="editUserStanowisko" class="form-control" placeholder="np. Trener, Recepcjonista">
+          </div>
+          <div class="mb-2">
+            <label class="form-label">Data zatrudnienia</label>
+            <input type="date" id="editUserDataZatrudnienia" class="form-control">
+          </div>
+          <div class="row mb-2">
+            <div class="col">
+              <label class="form-label">Badania lekarskie — data</label>
+              <input type="date" id="editUserDataBadan" class="form-control">
+            </div>
+            <div class="col">
+              <label class="form-label">Ważne do</label>
+              <input type="date" id="editUserWaznoscBadan" class="form-control">
+            </div>
+          </div>
+          <div class="mb-2">
+            <label class="form-label">Nowe hasło <span class="text-muted small">(zostaw puste, żeby nie zmieniać)</span></label>
+            <div class="input-group">
+              <input type="password" id="editUserPassword" class="form-control" placeholder="Opcjonalne">
+              <button class="btn btn-outline-secondary" type="button" onclick="togglePasswordVisibility('editUserPassword', this)" title="Pokaż/ukryj">&#x1F441;</button>
+            </div>
+          </div>
+          <hr>
+          <h6 class="text-muted mb-3">Urlopy</h6>
+          <div class="mb-2">
+            <label class="form-label">Wymiar etatu</label>
+            <select id="editEtat" class="form-select" onchange="autoFillDays('editEtat','editWymiar')">
+              <option value="1">Cały etat (1/1)</option>
+              <option value="3/4">3/4 etatu</option>
+              <option value="1/2">1/2 etatu</option>
+              <option value="1/4">1/4 etatu</option>
+            </select>
+          </div>
+          <div class="row">
+            <div class="col">
+              <label class="form-label">Urlop w tym roku (dni)</label>
+              <input type="number" id="editWymiar" class="form-control" min="0">
+            </div>
+            <div class="col">
+              <label class="form-label">Zaległy urlop (dni)</label>
+              <input type="number" id="editZalegly" class="form-control" min="0">
+            </div>
+          </div>
+          <div class="mt-3 p-2 bg-light rounded small text-muted" id="editLeaveInfo"></div>
+        </div>
+        <div class="modal-footer">
+          <button class="btn btn-secondary" data-bs-dismiss="modal">Anuluj</button>
+          <button class="btn btn-primary" onclick="saveUser()">Zapisz</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== MODAL: Edytuj wniosek (admin) ===== -->
+  <div class="modal fade" id="modalEditRequest" tabindex="-1">
+    <div class="modal-dialog">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title">Edytuj wniosek — <span id="erUserName"></span></h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+          <div class="mb-3">
+            <label class="form-label">Rodzaj urlopu</label>
+            <select id="erTyp" class="form-select"></select>
+          </div>
+          <div class="row mb-3">
+            <div class="col">
+              <label class="form-label">Data od <span class="text-danger">*</span></label>
+              <input type="date" id="erStart" class="form-control">
+            </div>
+            <div class="col">
+              <label class="form-label">Data do <span class="text-danger">*</span></label>
+              <input type="date" id="erEnd" class="form-control">
+            </div>
+          </div>
+          <div id="erDaysInfo" class="alert alert-info py-2 d-none small"></div>
+          <div class="mb-3">
+            <label class="form-label">Powód</label>
+            <input type="text" id="erReason" class="form-control">
+          </div>
+          <div class="mb-3">
+            <label class="form-label">Uwaga admina</label>
+            <textarea id="erNote" class="form-control" rows="2"></textarea>
+          </div>
+          <div class="mb-2">
+            <label class="form-label">Status</label>
+            <select id="erStatus" class="form-select">
+              <option value="pending">Oczekuje</option>
+              <option value="approved">Zatwierdzone</option>
+              <option value="rejected">Odrzucone</option>
+            </select>
+          </div>
+          <div id="erOverlapSection" class="mt-3 d-none">
+            <hr>
+            <div class="small fw-semibold text-muted mb-2">Kto ma urlop w tym czasie (±7 dni):</div>
+            <div id="erOverlapList"></div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button class="btn btn-secondary" data-bs-dismiss="modal">Anuluj</button>
+          <button class="btn btn-primary" onclick="saveRequest()">Zapisz zmiany</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== MODAL: Szczegóły urlopów pracownika ===== -->
+  <div class="modal fade" id="modalEmpDetail" tabindex="-1">
+    <div class="modal-dialog">
+      <div class="modal-content">
+        <div class="modal-header py-2">
+          <div>
+            <h6 class="modal-title mb-0" id="empDetailTitle"></h6>
+            <small class="text-muted" id="empDetailPeriod"></small>
+          </div>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body py-2 px-3" id="empDetailBody"></div>
+        <div class="modal-footer py-2 justify-content-between">
+          <div id="empDetailFoot"></div>
+          <button class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Zamknij</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== MODAL: Zwolnij pracownika ===== -->
+  <div class="modal fade" id="modalZwolnij" tabindex="-1">
+    <div class="modal-dialog modal-sm">
+      <div class="modal-content">
+        <div class="modal-header bg-warning">
+          <h5 class="modal-title">Zwolnij pracownika</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+          <p class="mb-3">Pracownik <strong id="zwolnijUserName"></strong> zostanie oznaczony jako zwolniony i zniknie z list. Historia urlopów zostaje.</p>
+          <div class="mb-2">
+            <label class="form-label">Data zwolnienia</label>
+            <input type="date" id="zwolnijData" class="form-control">
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button class="btn btn-secondary" data-bs-dismiss="modal">Anuluj</button>
+          <button class="btn btn-danger" onclick="confirmZwolnij()">Zwolnij</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== MODAL: Dane logowania pracownika ===== -->
+  <div class="modal fade" id="modalCredentials" tabindex="-1">
+    <div class="modal-dialog modal-sm">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title">Dane logowania — <span id="credUserName"></span></h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+          <div class="mb-3">
+            <label class="form-label fw-semibold">Login</label>
+            <div class="input-group">
+              <input type="text" id="credLogin" class="form-control" readonly>
+              <button class="btn btn-outline-secondary" type="button" onclick="copyCredField('credLogin')" title="Kopiuj">&#x2398;</button>
+            </div>
+            <div class="form-text text-muted">Pracownik loguje się tym loginem (lub emailem)</div>
+          </div>
+          <div class="mb-3">
+            <label class="form-label fw-semibold">Nowe hasło</label>
+            <div class="input-group">
+              <input type="password" id="credPassword" class="form-control" placeholder="Wpisz nowe hasło">
+              <button class="btn btn-outline-secondary" type="button" onclick="togglePasswordVisibility('credPassword', this)" title="Pokaż/ukryj">&#x1F441;</button>
+            </div>
+            <div class="form-text text-muted">Obecnego hasła nie można wyświetlić — tu możesz je zresetować</div>
+          </div>
+          <div id="credAlert" class="alert d-none py-2 small"></div>
+        </div>
+        <div class="modal-footer">
+          <button class="btn btn-secondary" data-bs-dismiss="modal">Zamknij</button>
+          <button class="btn btn-primary" onclick="saveCredentials()">Zapisz hasło</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== MODAL: Dodaj urlop za pracownika ===== -->
+  <div class="modal fade" id="modalAdminAddRequest" tabindex="-1">
+    <div class="modal-dialog">
+      <div class="modal-content">
+        <div class="modal-header bg-success text-white">
+          <h5 class="modal-title">Dodaj urlop za pracownika</h5>
+          <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+          <div class="mb-3">
+            <label class="form-label">Pracownik <span class="text-danger">*</span></label>
+            <select id="aarUser" class="form-select"></select>
+          </div>
+          <div class="mb-3">
+            <label class="form-label">Rodzaj urlopu <span class="text-danger">*</span></label>
+            <select id="aarTyp" class="form-select"></select>
+          </div>
+          <div class="row mb-3">
+            <div class="col">
+              <label class="form-label">Data od <span class="text-danger">*</span></label>
+              <input type="date" id="aarStart" class="form-control">
+            </div>
+            <div class="col">
+              <label class="form-label">Data do <span class="text-danger">*</span></label>
+              <input type="date" id="aarEnd" class="form-control">
+            </div>
+          </div>
+          <div id="aarDaysInfo" class="alert alert-info py-2 small d-none"></div>
+          <div class="mb-3">
+            <label class="form-label">Status</label>
+            <select id="aarStatus" class="form-select">
+              <option value="approved">Zatwierdzone</option>
+              <option value="pending">Oczekuje</option>
+              <option value="rejected">Odrzucone</option>
+            </select>
+          </div>
+          <div class="mb-2">
+            <label class="form-label">Powód <span class="text-muted small">(opcjonalne)</span></label>
+            <textarea id="aarReason" class="form-control" rows="2"></textarea>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button class="btn btn-secondary" data-bs-dismiss="modal">Anuluj</button>
+          <button class="btn btn-success" onclick="submitAdminRequest()">Dodaj urlop</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== MODAL: Dodaj / Edytuj rodzaj urlopu ===== -->
+  <div class="modal fade" id="modalLeaveType" tabindex="-1">
+    <div class="modal-dialog">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title" id="leaveTypeModalTitle">Rodzaj urlopu</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+          <div class="mb-2">
+            <label class="form-label">Nazwa <span class="text-danger">*</span></label>
+            <input type="text" id="ltNazwa" class="form-control" placeholder="np. Urlop wypoczynkowy">
+          </div>
+          <div class="mb-2" id="ltKodRow">
+            <label class="form-label">Kod <span class="text-danger">*</span></label>
+            <input type="text" id="ltKod" class="form-control" placeholder="np. wypoczynkowy">
+            <div class="form-text">Unikalny identyfikator, tylko litery/cyfry/podkreślenia</div>
+          </div>
+          <div class="mb-2">
+            <label class="form-label">Opis</label>
+            <textarea id="ltOpis" class="form-control" rows="2" placeholder="Krótki opis rodzaju urlopu"></textarea>
+          </div>
+          <div class="mb-2">
+            <label class="form-label">Kolor w kalendarzu</label>
+            <div class="d-flex align-items-center gap-2">
+              <input type="color" id="ltKolor" class="form-control form-control-color" value="#42A5F5" style="width:48px;height:38px;padding:2px">
+              <span class="text-muted small">Wybierz kolor wyświetlany w kalendarzu</span>
+            </div>
+          </div>
+          <div class="row">
+            <div class="col">
+              <label class="form-label">Limit dni / rok</label>
+              <input type="number" id="ltLimit" class="form-control" placeholder="bez limitu" min="1">
+              <div class="form-text">Pozostaw puste = bez limitu</div>
+            </div>
+            <div class="col d-flex flex-column gap-2 justify-content-end pb-1">
+              <div class="form-check">
+                <input class="form-check-input" type="checkbox" id="ltPlatny" checked>
+                <label class="form-check-label" for="ltPlatny">Urlop płatny</label>
+              </div>
+              <div class="form-check">
+                <input class="form-check-input" type="checkbox" id="ltWlicza" checked>
+                <label class="form-check-label" for="ltWlicza">Wlicza w podstawę urlopu</label>
+              </div>
+              <div class="form-check" id="ltAktywnyRow" style="display:none!important">
+                <input class="form-check-input" type="checkbox" id="ltAktywny" checked>
+                <label class="form-check-label" for="ltAktywny">Aktywny</label>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button class="btn btn-secondary" data-bs-dismiss="modal">Anuluj</button>
+          <button class="btn btn-primary" id="ltSaveBtn" onclick="saveLeaveType()">Zapisz</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/xlsx-js-style@1.2.0/dist/xlsx.bundle.js"></script>
+  <script src="js/app.js"></script>
+  <script>
+    if (!localStorage.getItem('token') || localStorage.getItem('userRole') !== 'admin') {
+      window.location.href = 'login-admin.html';
+    }
+    document.getElementById('navUser').textContent = localStorage.getItem('userName') || '';
+
+    let allRequests  = [];
+    let pendingReviewId = null;
+    let pendingReviewApprove = false;
+    let editLeaveUserId = null;
+    let editLeaveTypeId = null;
+    let editUserId = null;
+    let editRequestId = null;
+    let leaveTypesCache = [];
+
+    function logout() { localStorage.clear(); window.location.href = 'login-admin.html'; }
+
+    function statusBadge(s) {
+      const m = { pending:['badge-pending','Oczekuje'], approved:['badge-approved','Zatwierdzone'], rejected:['badge-rejected','Odrzucone'] };
+      const [c, l] = m[s] || ['bg-secondary', s];
+      return `<span class="badge ${c}">${l}</span>`;
+    }
+
+    function fmtDate(d) {
+      if (!d) return '–';
+      const dt = new Date(d);
+      if (isNaN(dt.getTime())) return '–';
+      return `${dt.getFullYear()}-${String(dt.getMonth()+1).padStart(2,'0')}-${String(dt.getDate()).padStart(2,'0')}`;
+    }
+
+    function getEaster(y) {
+      const a=y%19,b=Math.floor(y/100),c=y%100,d=Math.floor(b/4),e=b%4,
+            f=Math.floor((b+8)/25),g=Math.floor((b-f+1)/3),
+            h=(19*a+b-d-g+15)%30,i=Math.floor(c/4),k=c%4,
+            l=(32+2*e+2*i-h-k)%7,m=Math.floor((a+11*h+22*l)/451),
+            mo=Math.floor((h+l-7*m+114)/31),dy=((h+l-7*m+114)%31)+1;
+      return new Date(Date.UTC(y,mo-1,dy));
+    }
+    function getHolidays(y) {
+      const add=(d,n)=>{const r=new Date(d);r.setUTCDate(r.getUTCDate()+n);return r.toISOString().slice(0,10);};
+      const e=getEaster(y);
+      return new Set([
+        `${y}-01-01`,`${y}-01-06`,`${y}-05-01`,`${y}-05-03`,
+        `${y}-08-15`,`${y}-11-01`,`${y}-11-11`,`${y}-12-25`,`${y}-12-26`,
+        e.toISOString().slice(0,10), add(e,1), add(e,49), add(e,60)
+      ]);
+    }
+    function countWorkingDays(a, b) {
+      const s=new Date(fmtDate(a)), e=new Date(fmtDate(b));
+      const hols=new Set(); for(let y=s.getFullYear();y<=e.getFullYear();y++) getHolidays(y).forEach(h=>hols.add(h));
+      let n=0,c=new Date(s);
+      while(c<=e){const dw=c.getDay(),ds=c.toISOString().slice(0,10); if(dw&&dw!==6&&!hols.has(ds))n++; c.setDate(c.getDate()+1);}
+      return n;
+    }
+    function daysBetween(a, b) { return countWorkingDays(a, b); }
+
+    function etatLabel(e) { return e === '1' ? 'Cały etat' : `${e} etatu`; }
+
+    function badaniaBadge(dataBadan, waznoscBadan) {
+      if (!waznoscBadan) return '<span class="text-muted small">brak</span>';
+      const today = new Date(); today.setHours(0,0,0,0);
+      const wazne = new Date(String(waznoscBadan).slice(0,10));
+      const dni   = Math.round((wazne - today) / 86400000);
+      const cls   = dni < 0 ? 'danger' : dni <= 30 ? 'warning' : 'success';
+      const info  = dni < 0 ? 'Przeterminowane' : dni === 0 ? 'Wygasa dziś' : `Ważne do ${fmtDate(waznoscBadan)}`;
+      const done  = dataBadan ? `<div class="text-muted" style="font-size:11px">Zrobione: ${fmtDate(dataBadan)}</div>` : '';
+      return `<span class="badge bg-${cls}">${info}</span>${done}`;
+    }
+
+    function autoFillDays(etatId, wymiarId) {
+      const m = { '1':26, '3/4':20, '1/2':13, '1/4':7 };
+      document.getElementById(wymiarId).value = m[document.getElementById(etatId).value] ?? 26;
+    }
+
+    function showAlert(id, msg, type) {
+      const el = document.getElementById(id);
+      el.className = `alert alert-${type}`;
+      el.textContent = msg;
+      setTimeout(() => { el.className = 'alert d-none'; }, 4000);
+    }
+
+    function checkAuth(data) {
+      if (!data.success && data.message &&
+          (data.message.includes('uprawnień') || data.message.includes('tokenu') || data.message.includes('wygasły'))) {
+        localStorage.clear();
+        window.location.href = 'login-admin.html';
+        return false;
+      }
+      return true;
+    }
+
+    // ---- WNIOSKI ----
+    function renderRequests() {
+      const filter = document.getElementById('filterStatus').value;
+      const filtered = filter ? allRequests.filter(r => r.status === filter) : allRequests;
+      document.getElementById('badgePending').textContent = allRequests.filter(r => r.status === 'pending').length;
+      const tbody = document.getElementById('requestsTable');
+      if (!filtered.length) {
+        tbody.innerHTML = '<tr><td colspan="9" class="text-center text-muted">Brak wniosków</td></tr>';
+        return;
+      }
+      tbody.innerHTML = filtered.map(r => `
+        <tr>
+          <td><strong>${r.user_name}</strong></td>
+          <td><span class="badge bg-info text-dark">${r.typ_urlopu || 'wypoczynkowy'}</span></td>
+          <td>${fmtDate(r.start_date)}</td>
+          <td>${fmtDate(r.end_date)}</td>
+          <td>${daysBetween(r.start_date, r.end_date)}</td>
+          <td>${r.reason || '<span class="text-muted">–</span>'}</td>
+          <td>${statusBadge(r.status)}</td>
+          <td>${r.admin_note || '<span class="text-muted">–</span>'}</td>
+          <td>
+            ${r.status === 'pending' ? `
+              <button class="btn btn-success btn-sm me-1" onclick="openReview(${r.id},true,'${r.user_name}','${r.start_date}','${r.end_date}')">✓</button>
+              <button class="btn btn-danger btn-sm me-1"  onclick="openReview(${r.id},false,'${r.user_name}','${r.start_date}','${r.end_date}')">✗</button>
+            ` : ''}
+            <button class="btn btn-outline-secondary btn-sm me-1" onclick='openEditRequest(${JSON.stringify(r)})'>✎</button>
+            <button class="btn btn-outline-danger btn-sm" onclick="deleteRequest(${r.id},'${r.user_name}')" title="Usuń wniosek">🗑</button>
+          </td>
+        </tr>`).join('');
+    }
+
+    async function loadRequests() {
+      const data = await API.getRequests();
+      if (!checkAuth(data)) return;
+      if (data.success) { allRequests = data.data; renderRequests(); }
+    }
+
+    function openReview(id, approve, name, start, end) {
+      pendingReviewId = id; pendingReviewApprove = approve;
+      document.getElementById('modalReviewTitle').textContent = approve ? 'Zatwierdź wniosek' : 'Odrzuć wniosek';
+      document.getElementById('modalReviewInfo').textContent  = `${name}: ${fmtDate(start)} – ${fmtDate(end)}`;
+      document.getElementById('modalReviewNote').value = '';
+      document.getElementById('modalReviewBtn').textContent  = approve ? 'Zatwierdź' : 'Odrzuć';
+      document.getElementById('modalReviewBtn').className = `btn ${approve ? 'btn-success' : 'btn-danger'}`;
+      new bootstrap.Modal(document.getElementById('modalReview')).show();
+    }
+
+    document.getElementById('modalReviewBtn').addEventListener('click', async () => {
+      const note = document.getElementById('modalReviewNote').value;
+      const data = pendingReviewApprove
+        ? await API.approveRequest(pendingReviewId, note)
+        : await API.rejectRequest(pendingReviewId, note);
+      bootstrap.Modal.getInstance(document.getElementById('modalReview')).hide();
+      if (data.success) { loadRequests(); showAlert('alertRequests', data.message, 'success'); }
+      else { showAlert('alertRequests', data.message || 'Błąd podczas zatwierdzania', 'danger'); }
+    });
+
+    document.getElementById('filterStatus').addEventListener('change', renderRequests);
+
+    // ---- EDYCJA WNIOSKU ----
+    async function openEditRequest(r) {
+      editRequestId = r.id;
+      document.getElementById('erUserName').textContent = r.user_name;
+      document.getElementById('erStart').value  = fmtDate(r.start_date);
+      document.getElementById('erEnd').value    = fmtDate(r.end_date);
+      document.getElementById('erReason').value = r.reason || '';
+      document.getElementById('erNote').value   = r.admin_note || '';
+      document.getElementById('erStatus').value = r.status;
+      const sel = document.getElementById('erTyp');
+      sel.innerHTML = leaveTypesCache.map(t =>
+        `<option value="${t.kod}" ${t.kod === r.typ_urlopu ? 'selected' : ''}>${t.nazwa}</option>`
+      ).join('');
+      updateErDays();
+
+      // Załaduj kto ma urlop w tym czasie
+      document.getElementById('erOverlapSection').classList.add('d-none');
+      document.getElementById('erOverlapList').innerHTML = '<span class="text-muted small">Ładowanie...</span>';
+      new bootstrap.Modal(document.getElementById('modalEditRequest')).show();
+
+      const ov = await API.getRequestOverlap(r.id);
+      const sec = document.getElementById('erOverlapSection');
+      const list = document.getElementById('erOverlapList');
+      if (ov.success && ov.data.length > 0) {
+        sec.classList.remove('d-none');
+        list.innerHTML = ov.data.map(o => `
+          <div class="d-flex justify-content-between align-items-center py-1 border-bottom">
+            <div>
+              <strong class="small">${o.name}</strong>
+              ${o.stanowisko ? `<span class="text-muted small ms-1">(${o.stanowisko})</span>` : ''}
+            </div>
+            <div class="text-end small">
+              <span class="badge bg-info text-dark me-1">${o.typ_urlopu || '–'}</span>
+              ${fmtDate(o.start_date)} – ${fmtDate(o.end_date)}
+              <span class="text-muted ms-1">(${o.dni_robocze || 0} dni)</span>
+            </div>
+          </div>`).join('');
+      } else if (ov.success) {
+        sec.classList.remove('d-none');
+        list.innerHTML = '<span class="text-success small">Nikt inny nie ma urlopu w tym czasie.</span>';
+      }
+    }
+
+    function updateErDays() {
+      const s = document.getElementById('erStart').value;
+      const e = document.getElementById('erEnd').value;
+      const info = document.getElementById('erDaysInfo');
+      if (s && e && s <= e) {
+        info.className = 'alert alert-info py-2 small';
+        info.textContent = `Dni roboczych: ${countWorkingDays(s, e)}`;
+      } else {
+        info.className = 'alert alert-info py-2 small d-none';
+      }
+    }
+
+    async function saveRequest() {
+      const start  = document.getElementById('erStart').value;
+      const end    = document.getElementById('erEnd').value;
+      const typ    = document.getElementById('erTyp').value;
+      const reason = document.getElementById('erReason').value.trim();
+      const note   = document.getElementById('erNote').value.trim();
+      const status = document.getElementById('erStatus').value;
+      if (!start || !end) return alert('Podaj daty');
+      if (start > end)   return alert('Data końcowa musi być po startowej');
+      const data = await API.updateRequest(editRequestId, { start_date: start, end_date: end, typ_urlopu: typ, reason, admin_note: note, status });
+      bootstrap.Modal.getInstance(document.getElementById('modalEditRequest')).hide();
+      if (data.success) { loadRequests(); showAlert('alertRequests', data.message, 'success'); }
+      else { showAlert('alertRequests', data.message, 'danger'); }
+    }
+
+    // ---- PRACOWNICY ----
+    async function loadUsers() {
+      const showAll = document.getElementById('toggleZwolnieni').checked;
+      const data = await API.getUsers(showAll);
+      if (!checkAuth(data)) return;
+      if (!data.success) return;
+      const tbody = document.getElementById('usersTable');
+      if (!data.data.length) {
+        tbody.innerHTML = '<tr><td colspan="11" class="text-center text-muted">Brak pracowników</td></tr>';
+        return;
+      }
+      tbody.innerHTML = data.data.map(u => {
+        const total    = (Number(u.urlop_wymiar)||0) + (Number(u.urlop_zalegly)||0);
+        const used     = Number(u.urlop_wykorzystany)||0;
+        const left     = Math.max(total - used, 0);
+        const pct      = total > 0 ? Math.min(Math.round(used/total*100), 100) : 0;
+        const barCls   = pct >= 100 ? 'danger' : pct >= 75 ? 'warning' : '';
+        const zwolniony = u.aktywny === false;
+        const rowStyle  = zwolniony ? 'opacity:0.55;background:#f8f9fa' : '';
+        const zwolnBadge = zwolniony
+          ? `<span class="badge bg-danger ms-1" title="Zwolniony ${fmtDate(u.data_zwolnienia)}">Zwolniony ${fmtDate(u.data_zwolnienia)}</span>`
+          : '';
+        return `<tr style="${rowStyle}">
+          <td><strong>${u.name}</strong>${zwolnBadge}</td>
+          <td>${u.stanowisko ? `<span class="text-muted small">${u.stanowisko}</span>` : '<span class="text-muted">–</span>'}</td>
+          <td>${u.login ? `<code>${u.login}</code>` : '<span class="text-muted">–</span>'}</td>
+          <td>${u.email}</td>
+          <td><span class="badge bg-secondary">${etatLabel(u.etat||'1')}</span></td>
+          <td>${u.urlop_wymiar??26} dni</td>
+          <td>${u.urlop_zalegly??0} dni</td>
+          <td>
+            <div class="d-flex align-items-center gap-2">
+              <span>${used} dni</span>
+              <div class="urlop-bar flex-grow-1">
+                <div class="urlop-bar-fill ${barCls}" style="width:${pct}%"></div>
+              </div>
+            </div>
+          </td>
+          <td><strong class="${left===0?'text-danger':left<=3?'text-warning':'text-success'}">${left} dni</strong></td>
+          <td>${badaniaBadge(u.data_badan, u.waznosc_badan)}</td>
+          <td>
+            ${zwolniony ? `
+              <button class="btn btn-outline-success btn-sm" onclick="przywrocUser(${u.id},'${u.name}')">Przywróć</button>
+            ` : `
+              <button class="btn btn-outline-info btn-sm me-1" onclick="openCredentials(${u.id},'${u.name}','${u.login||''}')" title="Dane logowania">&#x1F511;</button>
+              <button class="btn btn-outline-secondary btn-sm me-1" onclick='openEditUser(${JSON.stringify(u)})'>Edytuj</button>
+              <button class="btn btn-outline-warning btn-sm me-1" onclick="openZwolnijModal(${u.id},'${u.name}')">Zwolnij</button>
+              <button class="btn btn-outline-danger btn-sm" onclick="deleteUser(${u.id},'${u.name}')">Usuń</button>
+            `}
+          </td>
+        </tr>`;
+      }).join('');
+    }
+
+    async function createUser() {
+      const name              = document.getElementById('newUserName').value.trim();
+      const email             = document.getElementById('newUserEmail').value.trim();
+      const login             = document.getElementById('newUserLogin').value.trim();
+      const password          = document.getElementById('newUserPassword').value;
+      const stanowisko        = document.getElementById('newUserStanowisko').value.trim();
+      const data_zatrudnienia = document.getElementById('newUserDataZatrudnienia').value || null;
+      const data_badan        = document.getElementById('newUserDataBadan').value || null;
+      const waznosc_badan     = document.getElementById('newUserWaznoscBadan').value || null;
+      const etat              = document.getElementById('newUserEtat').value;
+      const wymiar            = parseInt(document.getElementById('newUserWymiar').value)||26;
+      const zalegly           = parseInt(document.getElementById('newUserZalegly').value)||0;
+      if (!name||!email||!password) return alert('Wypełnij wszystkie pola');
+      const data = await API.createUser(name, email, password, etat, wymiar, zalegly, stanowisko, login, data_zatrudnienia, data_badan, waznosc_badan);
+      bootstrap.Modal.getInstance(document.getElementById('modalAddUser')).hide();
+      if (data.success) { loadUsers(); showAlert('alertUsers', data.message, 'success'); }
+      else { showAlert('alertUsers', data.message, 'danger'); }
+    }
+
+    function openEditUser(u) {
+      const used  = Number(u.urlop_wykorzystany) || 0;
+      const total = (Number(u.urlop_wymiar) || 0) + (Number(u.urlop_zalegly) || 0);
+      editUserId = u.id;
+      document.getElementById('editUserTitle').textContent          = u.name;
+      document.getElementById('editUserName').value                 = u.name;
+      document.getElementById('editUserEmail').value                = u.email;
+      document.getElementById('editUserLogin').value                = u.login || '';
+      document.getElementById('editUserStanowisko').value           = u.stanowisko || '';
+      document.getElementById('editUserDataZatrudnienia').value     = u.data_zatrudnienia ? String(u.data_zatrudnienia).slice(0,10) : '';
+      document.getElementById('editUserDataBadan').value            = u.data_badan ? String(u.data_badan).slice(0,10) : '';
+      document.getElementById('editUserWaznoscBadan').value         = u.waznosc_badan ? String(u.waznosc_badan).slice(0,10) : '';
+      document.getElementById('editUserPassword').value             = '';
+      document.getElementById('editEtat').value                     = u.etat || '1';
+      document.getElementById('editWymiar').value                   = u.urlop_wymiar ?? 26;
+      document.getElementById('editZalegly').value                  = u.urlop_zalegly ?? 0;
+      const left = Math.max(total - used, 0);
+      document.getElementById('editLeaveInfo').innerHTML =
+        `Wykorzystano w tym roku: <strong>${used} dni</strong> &nbsp;|&nbsp; Pozostało: <strong>${left} dni</strong>`;
+      new bootstrap.Modal(document.getElementById('modalEditUser')).show();
+    }
+
+    async function saveUser() {
+      const name              = document.getElementById('editUserName').value.trim();
+      const email             = document.getElementById('editUserEmail').value.trim();
+      const login             = document.getElementById('editUserLogin').value.trim();
+      const stanowisko        = document.getElementById('editUserStanowisko').value.trim();
+      const data_zatrudnienia = document.getElementById('editUserDataZatrudnienia').value || null;
+      const data_badan        = document.getElementById('editUserDataBadan').value || null;
+      const waznosc_badan     = document.getElementById('editUserWaznoscBadan').value || null;
+      const password          = document.getElementById('editUserPassword').value;
+      const etat              = document.getElementById('editEtat').value;
+      const wymiar            = parseInt(document.getElementById('editWymiar').value);
+      const zalegly           = parseInt(document.getElementById('editZalegly').value);
+      if (!name || !email) return alert('Imię i email są wymagane');
+
+      const [d1, d2] = await Promise.all([
+        API.updateUser(editUserId, name, email, password || null, stanowisko, login, data_zatrudnienia, data_badan, waznosc_badan),
+        API.updateUserLeave(editUserId, etat, wymiar, zalegly)
+      ]);
+
+      bootstrap.Modal.getInstance(document.getElementById('modalEditUser')).hide();
+      if (d1.success && d2.success) { loadUsers(); showAlert('alertUsers', 'Dane pracownika zapisane', 'success'); }
+      else { showAlert('alertUsers', d1.message || d2.message, 'danger'); }
+    }
+
+    let zwolnijUserId = null;
+    function openZwolnijModal(id, name) {
+      zwolnijUserId = id;
+      document.getElementById('zwolnijUserName').textContent = name;
+      document.getElementById('zwolnijData').value = new Date().toISOString().slice(0,10);
+      new bootstrap.Modal(document.getElementById('modalZwolnij')).show();
+    }
+    async function confirmZwolnij() {
+      const data_zwolnienia = document.getElementById('zwolnijData').value;
+      const res = await API.zwolnijUser(zwolnijUserId, data_zwolnienia);
+      bootstrap.Modal.getInstance(document.getElementById('modalZwolnij')).hide();
+      if (res.success) { loadUsers(); showAlert('alertUsers', res.message, 'success'); }
+      else { showAlert('alertUsers', res.message, 'danger'); }
+    }
+    async function przywrocUser(id, name) {
+      if (!confirm(`Przywrócić pracownika ${name}?`)) return;
+      const res = await API.przywrocUser(id);
+      if (res.success) { loadUsers(); showAlert('alertUsers', res.message, 'success'); }
+      else { showAlert('alertUsers', res.message, 'danger'); }
+    }
+
+    async function deleteUser(id, name) {
+      if (!confirm(`Usunąć użytkownika ${name}?`)) return;
+      const data = await API.deleteUser(id);
+      if (data.success) { loadUsers(); showAlert('alertUsers', data.message, 'success'); }
+    }
+
+    // ---- DANE LOGOWANIA ----
+    let credUserId = null;
+
+    function openCredentials(id, name, login) {
+      credUserId = id;
+      document.getElementById('credUserName').textContent = name;
+      document.getElementById('credLogin').value = login || '(brak — loguje się emailem)';
+      document.getElementById('credPassword').value = '';
+      document.getElementById('credPassword').type = 'password';
+      document.getElementById('credAlert').className = 'alert d-none py-2 small';
+      new bootstrap.Modal(document.getElementById('modalCredentials')).show();
+    }
+
+    async function saveCredentials() {
+      const password = document.getElementById('credPassword').value;
+      if (!password) {
+        document.getElementById('credAlert').className = 'alert alert-warning py-2 small';
+        document.getElementById('credAlert').textContent = 'Wpisz nowe hasło';
+        return;
+      }
+      const data = await API.updatePassword(credUserId, password);
+      const alertEl = document.getElementById('credAlert');
+      if (data.success) {
+        alertEl.className = 'alert alert-success py-2 small';
+        alertEl.textContent = 'Hasło zostało zmienione';
+        document.getElementById('credPassword').value = '';
+      } else {
+        alertEl.className = 'alert alert-danger py-2 small';
+        alertEl.textContent = data.message || 'Błąd zapisu';
+      }
+    }
+
+    function togglePasswordVisibility(inputId, btn) {
+      const input = document.getElementById(inputId);
+      if (input.type === 'password') {
+        input.type = 'text';
+        btn.style.opacity = '0.5';
+      } else {
+        input.type = 'password';
+        btn.style.opacity = '1';
+      }
+    }
+
+    function copyCredField(inputId) {
+      const val = document.getElementById(inputId).value;
+      navigator.clipboard.writeText(val).then(() => {
+        const btn = document.querySelector(`#${inputId} + button`) || document.getElementById(inputId).nextElementSibling;
+        const orig = btn.innerHTML;
+        btn.innerHTML = '✓';
+        btn.classList.add('btn-success');
+        btn.classList.remove('btn-outline-secondary');
+        setTimeout(() => { btn.innerHTML = orig; btn.classList.remove('btn-success'); btn.classList.add('btn-outline-secondary'); }, 1500);
+      });
+    }
+
+    // ---- RODZAJE URLOPÓW ----
+    async function loadLeaveTypes() {
+      const data = await API.getLeaveTypes();
+      if (!checkAuth(data)) return;
+      if (data.success) leaveTypesCache = data.data;
+      if (!data.success) return;
+      const tbody = document.getElementById('leaveTypesTable');
+      if (!data.data.length) {
+        tbody.innerHTML = '<tr><td colspan="7" class="text-center text-muted">Brak rodzajów urlopów</td></tr>';
+        return;
+      }
+      tbody.innerHTML = data.data.map(t => `
+        <tr class="${t.aktywny ? '' : 'table-secondary text-muted'}">
+          <td>
+            <span class="badge me-1" style="background:${t.kolor||'#42A5F5'};width:14px;height:14px;display:inline-block;border-radius:3px;vertical-align:middle"></span>
+            <strong>${t.nazwa}</strong>
+          </td>
+          <td><code>${t.kod}</code></td>
+          <td>${t.opis || '<span class="text-muted">–</span>'}</td>
+          <td>${t.platny ? '<span class="badge bg-success">Tak</span>' : '<span class="badge bg-secondary">Nie</span>'}</td>
+          <td>${t.wlicza_w_podstawe ? '<span class="badge bg-primary">Podstawowy</span>' : '<span class="badge bg-warning text-dark">Dodatkowy</span>'}</td>
+          <td>${t.limit_dni != null ? `${t.limit_dni} dni` : '<span class="text-muted">Bez limitu</span>'}</td>
+          <td>${t.aktywny ? '<span class="badge bg-success">Tak</span>' : '<span class="badge bg-secondary">Nie</span>'}</td>
+          <td>
+            <button class="btn btn-outline-primary btn-sm me-1" onclick='openEditLeaveType(${JSON.stringify(t)})'>Edytuj</button>
+            <button class="btn btn-outline-danger btn-sm" onclick="removeLeaveType(${t.id},'${t.nazwa}')">Usuń</button>
+          </td>
+        </tr>`).join('');
+    }
+
+    function openAddLeaveType() {
+      editLeaveTypeId = null;
+      document.getElementById('leaveTypeModalTitle').textContent = 'Dodaj rodzaj urlopu';
+      document.getElementById('ltKodRow').style.display = '';
+      document.getElementById('ltAktywnyRow').style.display = 'none';
+      document.getElementById('ltNazwa').value = '';
+      document.getElementById('ltKod').value   = '';
+      document.getElementById('ltOpis').value  = '';
+      document.getElementById('ltLimit').value = '';
+      document.getElementById('ltKolor').value = '#42A5F5';
+      document.getElementById('ltPlatny').checked  = true;
+      document.getElementById('ltWlicza').checked  = true;
+      document.getElementById('ltAktywny').checked = true;
+      new bootstrap.Modal(document.getElementById('modalLeaveType')).show();
+    }
+
+    function openEditLeaveType(t) {
+      editLeaveTypeId = t.id;
+      document.getElementById('leaveTypeModalTitle').textContent = 'Edytuj rodzaj urlopu';
+      document.getElementById('ltKodRow').style.display = 'none';
+      document.getElementById('ltAktywnyRow').style.display = '';
+      document.getElementById('ltNazwa').value = t.nazwa;
+      document.getElementById('ltOpis').value  = t.opis || '';
+      document.getElementById('ltLimit').value = t.limit_dni ?? '';
+      document.getElementById('ltKolor').value = t.kolor || '#42A5F5';
+      document.getElementById('ltPlatny').checked  = t.platny;
+      document.getElementById('ltWlicza').checked  = t.wlicza_w_podstawe;
+      document.getElementById('ltAktywny').checked = t.aktywny;
+      new bootstrap.Modal(document.getElementById('modalLeaveType')).show();
+    }
+
+    async function saveLeaveType() {
+      const nazwa     = document.getElementById('ltNazwa').value.trim();
+      const kod       = document.getElementById('ltKod').value.trim();
+      const opis      = document.getElementById('ltOpis').value.trim();
+      const limit_dni = document.getElementById('ltLimit').value ? parseInt(document.getElementById('ltLimit').value) : null;
+      const kolor            = document.getElementById('ltKolor').value;
+      const platny           = document.getElementById('ltPlatny').checked;
+      const wlicza_w_podstawe = document.getElementById('ltWlicza').checked;
+      const aktywny          = document.getElementById('ltAktywny').checked;
+
+      if (!nazwa) return alert('Podaj nazwę');
+
+      let data;
+      if (editLeaveTypeId) {
+        data = await API.updateLeaveType(editLeaveTypeId, { nazwa, opis, platny, limit_dni, aktywny, wlicza_w_podstawe, kolor });
+      } else {
+        if (!kod) return alert('Podaj kod');
+        data = await API.createLeaveType({ nazwa, kod, opis, platny, limit_dni, wlicza_w_podstawe, kolor });
+      }
+
+      bootstrap.Modal.getInstance(document.getElementById('modalLeaveType')).hide();
+      if (data.success) { loadLeaveTypes(); showAlert('alertSettings', data.message, 'success'); }
+      else { showAlert('alertSettings', data.message, 'danger'); }
+    }
+
+    async function removeLeaveType(id, nazwa) {
+      if (!confirm(`Usunąć rodzaj urlopu "${nazwa}"?`)) return;
+      const data = await API.deleteLeaveType(id);
+      if (data.success) { loadLeaveTypes(); showAlert('alertSettings', data.message, 'success'); }
+      else { showAlert('alertSettings', data.message, 'danger'); }
+    }
+
+    // ---- KALENDARZ ----
+    let calYear     = new Date().getFullYear();
+    let calMonth    = new Date().getMonth();
+    let calUsers    = [];
+    let calRequests = [];
+
+    const MONTH_NAMES = ['Styczeń','Luty','Marzec','Kwiecień','Maj','Czerwiec',
+                         'Lipiec','Sierpień','Wrzesień','Październik','Listopad','Grudzień'];
+    const DAY_SHORT   = ['N','P','W','Ś','C','P','S'];
+
+    function calPrev()    { if (calMonth===0){calMonth=11;calYear--;}else calMonth--; renderCalendar(); }
+    function calNext()    { if (calMonth===11){calMonth=0;calYear++;}else calMonth++; renderCalendar(); }
+    function calGoToday() { calYear=new Date().getFullYear(); calMonth=new Date().getMonth(); renderCalendar(); }
+
+    async function loadCalendar() {
+      const [ud, rd] = await Promise.all([API.getUsers(), API.getRequests()]);
+      if (!checkAuth(ud) || !checkAuth(rd)) return;
+      if (ud.success) calUsers    = ud.data;
+      if (rd.success) calRequests = rd.data;
+
+      // Wypełnij dropdown stanowisk
+      const stanowiska = [...new Set(calUsers.map(u => u.stanowisko).filter(Boolean))].sort();
+      const sel = document.getElementById('calFilterStanowisko');
+      const prev = sel.value;
+      sel.innerHTML = '<option value="">Wszystkie stanowiska</option>'
+        + stanowiska.map(s => `<option value="${s}" ${s === prev ? 'selected' : ''}>${s}</option>`).join('');
+
+      renderCalendar();
+    }
+
+    function renderCalendar() {
+      document.getElementById('calTitle').textContent = `${MONTH_NAMES[calMonth]} ${calYear}`;
+      const daysInMonth = new Date(calYear, calMonth + 1, 0).getDate();
+
+      // Święta dla bieżącego i sąsiednich lat
+      const hols = new Set();
+      [calYear - 1, calYear, calYear + 1].forEach(y => getHolidays(y).forEach(h => hols.add(h)));
+
+      // Zakres bieżącego miesiąca
+      const monthStartStr = `${calYear}-${String(calMonth+1).padStart(2,'0')}-01`;
+      const monthEndStr   = `${calYear}-${String(calMonth+1).padStart(2,'0')}-${String(daysInMonth).padStart(2,'0')}`;
+
+      // Rozszerzony zakres: 3 dni przed i po miesiącu
+      const extStart = new Date(Date.UTC(calYear, calMonth, -2));   // 3 dni przed
+      const extEnd   = new Date(Date.UTC(calYear, calMonth + 1, 3)); // 3 dni po
+
+      // Tablica wszystkich dni do wyświetlenia
+      const allDays = [];
+      for (let d = new Date(extStart); d <= extEnd; d.setUTCDate(d.getUTCDate() + 1))
+        allDays.push(d.toISOString().slice(0, 10));
+
+      const extStartStr = allDays[0];
+      const extEndStr   = allDays[allDays.length - 1];
+
+      // Mapa kolorów
+      const colorMap = {};
+      leaveTypesCache.forEach(lt => { colorMap[lt.kod] = lt.kolor || '#42A5F5'; });
+
+      // Legenda
+      document.getElementById('calLegend').innerHTML = leaveTypesCache.map(lt =>
+        `<span style="display:inline-flex;align-items:center;gap:5px;background:#f5f5f5;border-radius:6px;padding:3px 8px;font-size:12px">
+          <span style="width:12px;height:12px;border-radius:3px;background:${lt.kolor||'#42A5F5'};display:inline-block"></span>
+          ${lt.nazwa}
+        </span>`
+      ).join('');
+
+      // Nagłówek
+      let headHtml = '<tr>'
+        + '<th style="position:sticky;left:0;z-index:3;background:#f8f9fa;width:1px;white-space:nowrap;padding-right:8px">Pracownik</th>'
+        + '<th style="background:#f8f9fa;width:1px;white-space:nowrap;padding-right:8px">Stanowisko</th>';
+
+      allDays.forEach(dateStr => {
+        const dt        = new Date(dateStr + 'T00:00:00Z');
+        const dow       = dt.getUTCDay();
+        const d         = dt.getUTCDate();
+        const isCurrent = dateStr >= monthStartStr && dateStr <= monthEndStr;
+        const isWE      = dow === 0 || dow === 6;
+        const isHol     = hols.has(dateStr);
+        let bg, color;
+        if (!isCurrent)        { bg = '#ececec'; color = '#aaa'; }
+        else if (isWE || isHol){ bg = '#e9ecef'; color = '#999'; }
+        else                   { bg = '#fff';    color = '#333'; }
+        const sep = !isCurrent && dateStr === monthStartStr ? 'border-left:2px solid #aaa;' : '';
+        headHtml += `<th style="min-width:30px;max-width:30px;width:30px;text-align:center;background:${bg};color:${color};font-size:11px;padding:2px 1px;border-bottom:2px solid #dee2e6;${sep}">
+          ${d}<br><span style="font-size:9px">${DAY_SHORT[dow]}</span>
+        </th>`;
+      });
+      headHtml += '<th style="position:sticky;right:0;z-index:3;background:#f8f9fa;min-width:90px;text-align:center;border-left:2px solid #dee2e6;font-size:12px">Dni w mies.</th>';
+      headHtml += '</tr>';
+      document.getElementById('calHead').innerHTML = headHtml;
+
+      const body = document.getElementById('calBody');
+
+      // Filtr stanowisk
+      const filterStan = document.getElementById('calFilterStanowisko').value;
+
+      // Pracownicy z urlopem w rozszerzonym zakresie
+      const activeUsers = calUsers.filter(u =>
+        (!filterStan || u.stanowisko === filterStan) &&
+        calRequests.some(r =>
+          Number(r.user_id) === Number(u.id) &&
+          (r.status === 'approved' || r.status === 'pending') &&
+          String(r.start_date).slice(0,10) <= extEndStr &&
+          String(r.end_date).slice(0,10)   >= extStartStr
+        )
+      );
+
+      if (!activeUsers.length) {
+        body.innerHTML = `<tr><td colspan="${allDays.length + 3}" class="text-center text-muted py-4">Brak urlopów w tym miesiącu</td></tr>`;
+        return;
+      }
+
+      body.innerHTML = activeUsers.map(u => {
+        const reqs = calRequests.filter(r =>
+          Number(r.user_id) === Number(u.id) &&
+          (r.status === 'approved' || r.status === 'pending')
+        );
+
+        // Mapa dzień → wniosek (dla rozszerzonego zakresu)
+        const dayMap = {};
+        reqs.forEach(r => {
+          const s = new Date(String(r.start_date).slice(0,10) + 'T00:00:00Z');
+          const e = new Date(String(r.end_date).slice(0,10) + 'T00:00:00Z');
+          for (let cur = new Date(s); cur <= e; cur.setUTCDate(cur.getUTCDate()+1)) {
+            const ds = cur.toISOString().slice(0,10);
+            if (!dayMap[ds]) dayMap[ds] = r;
+          }
+        });
+
+        const nameParts = u.name.split(' ');
+        const nameHtml  = nameParts.length > 1
+          ? `${nameParts[0]}<br><span style="font-size:11px;font-weight:400">${nameParts.slice(1).join(' ')}</span>`
+          : u.name;
+
+        let rowHtml = '<tr>'
+          + `<td style="position:sticky;left:0;z-index:2;background:#fff;font-weight:600;white-space:nowrap;width:1px;padding-right:8px;line-height:1.3">${nameHtml}</td>`
+          + `<td style="background:#fff;font-size:12px;color:#666;white-space:nowrap;width:1px;padding-right:8px">${u.stanowisko||'–'}</td>`;
+
+        const sumByType = {};
+        let sumWorkingDays = 0;
+
+        allDays.forEach(dateStr => {
+          const dt        = new Date(dateStr + 'T00:00:00Z');
+          const dow       = dt.getUTCDay();
+          const isCurrent = dateStr >= monthStartStr && dateStr <= monthEndStr;
+          const isWE      = dow === 0 || dow === 6;
+          const isHol     = hols.has(dateStr);
+          const req       = dayMap[dateStr];
+
+          let cellBg = '';
+          let opacity = '1';
+          let border  = '';
+          let title   = '';
+
+          if (!isCurrent) {
+            cellBg = '#f0f0f0';
+          } else if (isWE || isHol) {
+            cellBg = '#e9ecef';
+          }
+
+          if (req) {
+            const col = colorMap[req.typ_urlopu] || '#42A5F5';
+            cellBg  = isCurrent ? col : col + '70';   // przyciemniony poza miesiącem
+            opacity = req.status === 'pending' ? '0.4' : (isCurrent ? '1' : '0.55');
+            border  = req.status === 'pending' ? `border:2px dashed ${col};box-sizing:border-box` : '';
+            title   = `${req.typ_urlopu} · ${req.status === 'approved' ? 'Zatwierdzone' : 'Oczekuje'}${isCurrent ? '' : ' (poza miesiącem)'}`;
+            // Suma tylko dla bieżącego miesiąca
+            if (req.status === 'approved' && isCurrent && !isWE && !isHol) {
+              sumByType[req.typ_urlopu] = (sumByType[req.typ_urlopu] || 0) + 1;
+              sumWorkingDays++;
+            }
+          }
+
+          const sep   = dateStr === monthStartStr ? 'border-left:2px solid #aaa;' : '';
+          const style = `background:${cellBg};opacity:${opacity};${border};${sep};padding:0;width:30px;min-width:30px;max-width:30px`;
+          rowHtml += `<td style="${style}" title="${title}"></td>`;
+        });
+
+        // Komórka sumy (tylko bieżący miesiąc)
+        let sumHtml = '';
+        if (sumWorkingDays > 0) {
+          const parts = Object.entries(sumByType).map(([kod, cnt]) => {
+            const col = colorMap[kod] || '#42A5F5';
+            return `<span style="display:inline-flex;align-items:center;gap:2px;font-size:11px;white-space:nowrap">
+              <span style="width:8px;height:8px;border-radius:2px;background:${col};display:inline-block;flex-shrink:0"></span>${cnt}d
+            </span>`;
+          });
+          sumHtml = `<div style="font-weight:700;font-size:13px;color:#1976D2">${sumWorkingDays} dni</div>`
+                  + `<div style="display:flex;flex-wrap:wrap;gap:2px;justify-content:center">${parts.join('')}</div>`;
+        } else {
+          sumHtml = '<span style="color:#ccc;font-size:12px">–</span>';
+        }
+
+        rowHtml += `<td style="position:sticky;right:0;z-index:2;background:#f8f9fa;text-align:center;vertical-align:middle;border-left:2px solid #dee2e6;min-width:90px;padding:4px">${sumHtml}</td>`;
+        rowHtml += '</tr>';
+        return rowHtml;
+      }).join('');
+    }
+
+    document.getElementById('erStart').addEventListener('change', updateErDays);
+    document.getElementById('erEnd').addEventListener('change', updateErDays);
+
+    // ---- DODAJ URLOP ZA PRACOWNIKA ----
+    async function openAdminAddRequest() {
+      // Załaduj typy urlopów jeśli cache pusty
+      if (!leaveTypesCache.length) {
+        const ltd = await API.getLeaveTypes();
+        if (ltd.success) leaveTypesCache = ltd.data;
+      }
+      const ud = await API.getUsers();
+      if (!checkAuth(ud)) return;
+      if (!ud.success || !ud.data.length) {
+        showAlert('alertRequests', 'Błąd ładowania listy pracowników', 'danger');
+        return;
+      }
+      document.getElementById('aarUser').innerHTML = ud.data.map(u =>
+        `<option value="${u.id}">${u.name}</option>`
+      ).join('');
+      const aktywneTypy = leaveTypesCache.filter(t => t.aktywny);
+      document.getElementById('aarTyp').innerHTML = aktywneTypy.length
+        ? aktywneTypy.map(t => `<option value="${t.kod}">${t.nazwa}</option>`).join('')
+        : '<option value="wypoczynkowy">Wypoczynkowy</option>';
+      document.getElementById('aarStart').value  = '';
+      document.getElementById('aarEnd').value    = '';
+      document.getElementById('aarReason').value = '';
+      document.getElementById('aarStatus').value = 'approved';
+      document.getElementById('aarDaysInfo').className = 'alert alert-info py-2 small d-none';
+      new bootstrap.Modal(document.getElementById('modalAdminAddRequest')).show();
+    }
+
+    function updateAarDays() {
+      const s = document.getElementById('aarStart').value;
+      const e = document.getElementById('aarEnd').value;
+      const info = document.getElementById('aarDaysInfo');
+      if (s && e && s <= e) {
+        info.className = 'alert alert-info py-2 small';
+        info.textContent = `Dni roboczych: ${countWorkingDays(s, e)}`;
+      } else {
+        info.className = 'alert alert-info py-2 small d-none';
+      }
+    }
+
+    async function submitAdminRequest() {
+      const userId = document.getElementById('aarUser').value;
+      const start  = document.getElementById('aarStart').value;
+      const end    = document.getElementById('aarEnd').value;
+      const typ    = document.getElementById('aarTyp').value;
+      const status = document.getElementById('aarStatus').value;
+      const reason = document.getElementById('aarReason').value.trim();
+      if (!userId) return alert('Wybierz pracownika');
+      if (!typ)    return alert('Wybierz rodzaj urlopu');
+      if (!start || !end) return alert('Podaj daty urlopu');
+      if (start > end)    return alert('Data końcowa musi być po startowej');
+      try {
+        const data = await API.adminCreateRequest(userId, start, end, typ, reason, status);
+        bootstrap.Modal.getInstance(document.getElementById('modalAdminAddRequest'))?.hide();
+        if (!checkAuth(data)) return;
+        if (data.success) { loadRequests(); showAlert('alertRequests', data.message, 'success'); }
+        else { showAlert('alertRequests', data.message || 'Błąd zapisu', 'danger'); }
+      } catch (e) {
+        bootstrap.Modal.getInstance(document.getElementById('modalAdminAddRequest'))?.hide();
+        showAlert('alertRequests', 'Błąd serwera — zrestartuj backend i spróbuj ponownie', 'danger');
+      }
+    }
+
+    async function deleteRequest(id, userName) {
+      if (!confirm(`Usunąć wniosek urlopowy pracownika ${userName}?`)) return;
+      try {
+        const data = await API.deleteRequest(id);
+        if (!checkAuth(data)) return;
+        if (data.success) { loadRequests(); showAlert('alertRequests', data.message, 'success'); }
+        else { showAlert('alertRequests', data.message || 'Błąd', 'danger'); }
+      } catch (e) {
+        showAlert('alertRequests', 'Błąd serwera — zrestartuj backend i spróbuj ponownie', 'danger');
+      }
+    }
+
+    document.getElementById('aarStart').addEventListener('change', updateAarDays);
+    document.getElementById('aarEnd').addEventListener('change', updateAarDays);
+
+    // ---- ZESTAWIENIE ----
+    let reportData = [];
+    let reportLeaveTypes = [];
+
+    function localDateStr(d) {
+      return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+    }
+
+    function reportSetRange(type) {
+      const now = new Date();
+      const y = now.getFullYear();
+      const m = now.getMonth();
+      let from, to;
+      if (type === 'month') {
+        from = new Date(y, m, 1);
+        to   = new Date(y, m + 1, 0);
+      } else if (type === 'quarter') {
+        const qStart = Math.floor(m / 3) * 3;
+        from = new Date(y, qStart, 1);
+        to   = new Date(y, qStart + 3, 0);
+      } else if (type === 'half') {
+        from = m < 6 ? new Date(y, 0, 1) : new Date(y, 6, 1);
+        to   = m < 6 ? new Date(y, 6, 0) : new Date(y, 12, 0);
+      } else {
+        from = new Date(y, 0, 1);
+        to   = new Date(y, 11, 31);
+      }
+      document.getElementById('reportFrom').value = localDateStr(from);
+      document.getElementById('reportTo').value   = localDateStr(to);
+    }
+
+    // Ustaw domyślny zakres — bieżący rok
+    (function() {
+      reportSetRange('year');
+    })();
+
+    async function loadReport() {
+      const date_from = document.getElementById('reportFrom').value;
+      const date_to   = document.getElementById('reportTo').value;
+      if (!date_from || !date_to) { alert('Podaj zakres dat'); return; }
+      const data  = await API.getReport(date_from, date_to);
+      if (!checkAuth(data)) return;
+      if (!data.success) {
+        showAlert('alertReport', data.message, 'danger');
+        return;
+      }
+      reportData       = data.data;
+      reportLeaveTypes = data.leave_types;
+      renderReport();
+    }
+
+    function renderReport() {
+      const colorMap = {};
+      leaveTypesCache.forEach(lt => { colorMap[lt.kod] = lt.kolor || '#42A5F5'; });
+
+      const lts = reportLeaveTypes;
+      const date_from = document.getElementById('reportFrom').value;
+      const date_to   = document.getElementById('reportTo').value;
+      const period    = `${date_from} – ${date_to}`;
+
+      // Nagłówek
+      let headHtml = `<tr><th colspan="${lts.length + 3}" class="text-center py-2" style="background:#1976D2;color:#fff;font-size:14px">Zestawienie urlopów — ${period}</th></tr>`;
+      headHtml += '<tr><th>Pracownik</th><th>Stanowisko</th>';
+      lts.forEach(lt => {
+        const col = colorMap[lt.kod] || '#42A5F5';
+        headHtml += `<th class="text-center" style="font-size:12px">
+          <span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:${col};margin-right:4px"></span>${lt.nazwa}
+        </th>`;
+      });
+      headHtml += '<th class="text-center">Razem</th></tr>';
+      document.getElementById('reportHead').innerHTML = headHtml;
+
+      // Wiersze
+      const totals = {};
+      lts.forEach(lt => { totals[lt.kod] = 0; });
+      let totalRazem = 0;
+
+      const filtered = reportData.filter(emp => emp.razem > 0);
+
+      const bodyRows = filtered.map(emp => {
+        let row = `<tr>
+          <td><a href="#" class="fw-bold text-decoration-none" onclick="openEmpDetail(${emp.id},'${emp.name.replace(/'/g,"\\'")}');return false;">${emp.name}</a></td>
+          <td class="text-muted small">${emp.stanowisko||'–'}</td>`;
+        lts.forEach(lt => {
+          const dni = emp.urlopy[lt.kod] || 0;
+          totals[lt.kod] = (totals[lt.kod]||0) + dni;
+          const col = colorMap[lt.kod] || '#42A5F5';
+          row += `<td class="text-center">${dni > 0
+            ? `<span style="background:${col}22;color:${col};font-weight:700;border-radius:4px;padding:2px 8px;display:inline-block">${dni}</span>`
+            : '<span class="text-muted">–</span>'}</td>`;
+        });
+        totalRazem += emp.razem || 0;
+        row += `<td class="text-center"><strong>${emp.razem || 0}</strong></td></tr>`;
+        return row;
+      });
+
+      document.getElementById('reportBody').innerHTML = bodyRows.join('') ||
+        `<tr><td colspan="${lts.length + 3}" class="text-center text-muted py-3">Brak urlopów w wybranym okresie</td></tr>`;
+
+      // Stopka — sumy (tylko kolumny z niezerowymi wartościami)
+      let footHtml = '<tr><td colspan="2"><strong>Suma</strong></td>';
+      lts.forEach(lt => { footHtml += `<td class="text-center"><strong>${totals[lt.kod]||0}</strong></td>`; });
+      footHtml += `<td class="text-center"><strong>${totalRazem}</strong></td></tr>`;
+      document.getElementById('reportFoot').innerHTML = footHtml;
+    }
+
+    function exportReportXLSX() {
+      if (!reportData.length) { alert('Najpierw wczytaj zestawienie'); return; }
+      const lts       = reportLeaveTypes;
+      const date_from = document.getElementById('reportFrom').value;
+      const date_to   = document.getElementById('reportTo').value;
+      const period    = `${date_from}_${date_to}`;
+
+      const MON_PL = ['sty','lut','mar','kwi','maj','cze','lip','sie','wrz','paź','lis','gru'];
+
+      function daysListText(requests) {
+        if (!requests || !requests.length) return '';
+        return requests.map(r => {
+          const days = getWorkingDaysList(r.start_date, r.end_date);
+          if (!days.length) return '';
+          // Grupuj w zakresy (przerwa <= 3 dni = most przez weekend)
+          const ranges = [];
+          let rs = days[0], rp = days[0];
+          for (let i = 1; i < days.length; i++) {
+            const diff = (new Date(days[i]) - new Date(rp)) / 86400000;
+            if (diff <= 3) { rp = days[i]; }
+            else { ranges.push([rs, rp]); rs = days[i]; rp = days[i]; }
+          }
+          ranges.push([rs, rp]);
+          const str = ranges.map(([s, e]) => {
+            const sd = new Date(s), ed = new Date(e);
+            const sD = sd.getUTCDate(), eD = ed.getUTCDate();
+            const sM = MON_PL[sd.getUTCMonth()], eM = MON_PL[ed.getUTCMonth()];
+            if (s === e) return `${sD} ${sM}`;
+            if (sM === eM) return `${sD}-${eD} ${sM}`;
+            return `${sD} ${sM} - ${eD} ${eM}`;
+          }).join(', ');
+          return `${r.typ_urlopu}: ${str}`;
+        }).join('\n');
+      }
+
+      // Mapa kod → polska nazwa
+      const ltNames = {};
+      lts.forEach(lt => { ltNames[lt.kod] = lt.nazwa; });
+
+      // Tylko typy urlopów faktycznie wykorzystanych w okresie
+      const ltsUsed = lts.filter(lt => reportData.some(emp => (emp.urlopy[lt.kod] || 0) > 0));
+
+      const header = ['Pracownik', ...ltsUsed.map(lt => lt.nazwa), 'Razem', 'Konkretne dni urlopu'];
+
+      // Buduj wiersze z informacją o granicach grup pracownika
+      const rowsMeta = []; // { cells, isFirst, isLast }
+
+      reportData.filter(emp => emp.razem > 0).forEach(emp => {
+        const reqs = emp.requests || [];
+        const emptyLeave = ltsUsed.map(() => '');
+
+        if (!reqs.length) {
+          rowsMeta.push({ cells: [emp.name, ...ltsUsed.map(lt => emp.urlopy[lt.kod] || 0), emp.razem || 0, ''], isFirst: true, isLast: true });
+          return;
+        }
+
+        reqs.forEach((r, i) => {
+          const nazwa = ltNames[r.typ_urlopu] || r.typ_urlopu;
+          const dni   = daysListText([r]).replace(/^[^:]+: /, '');
+          const cell  = `${nazwa}: ${dni}`;
+          if (i === 0) {
+            rowsMeta.push({ cells: [emp.name, ...ltsUsed.map(lt => emp.urlopy[lt.kod] || 0), emp.razem || 0, cell], isFirst: true, isLast: reqs.length === 1 });
+          } else {
+            rowsMeta.push({ cells: ['', ...emptyLeave, '', cell], isFirst: false, isLast: i === reqs.length - 1 });
+          }
+        });
+      });
+
+      const totals = ltsUsed.map(lt => reportData.reduce((s, e) => s + (e.urlopy[lt.kod]||0), 0));
+      const totalRazem = reportData.reduce((s, e) => s + (e.razem||0), 0);
+
+      const titleRow  = [`Zestawienie urlopów — ${date_from} – ${date_to}`, ...Array(header.length - 1).fill('')];
+      const ws = XLSX.utils.aoa_to_sheet([titleRow, header, ...rowsMeta.map(r => r.cells), ['SUMA', ...totals, totalRazem, '']]);
+      ws['!cols'] = [{ wch: 24 }, ...ltsUsed.map(() => ({ wch: 14 })), { wch: 8 }, { wch: 38 }];
+
+      // Scal komórki tytułu
+      ws['!merges'] = [{ s: { r: 0, c: 0 }, e: { r: 0, c: header.length - 1 } }];
+
+      // Styl tytułu
+      ws['A1'].s = {
+        font: { bold: true, sz: 13, color: { rgb: 'FFFFFFFF' } },
+        fill: { fgColor: { rgb: 'FF1976D2' } },
+        alignment: { horizontal: 'center', vertical: 'center' }
+      };
+
+      // Style: obramowanie i zawijanie tekstu
+      const bThin   = { style: 'thin',   color: { rgb: 'FFBBBBBB' } };
+      const bMedium = { style: 'medium', color: { rgb: 'FF333333' } };
+      const lastC   = header.length - 1;
+
+      // Zawijanie tekstu w nagłówkach (wiersz 1, bo 0 = tytuł)
+      for (let c = 0; c <= lastC; c++) {
+        const addr = XLSX.utils.encode_cell({ r: 1, c });
+        if (ws[addr]) {
+          ws[addr].s = {
+            alignment: { wrapText: true, vertical: 'bottom', horizontal: 'center' },
+            font: { bold: true }
+          };
+        }
+      }
+      ws['!rows'] = [{ hpt: 28 }, { hpt: 36 }]; // tytuł + nagłówek
+
+      rowsMeta.forEach((row, idx) => {
+        const xlRow = idx + 2; // 0 = tytuł, 1 = nagłówek
+        for (let c = 0; c <= lastC; c++) {
+          const addr = XLSX.utils.encode_cell({ r: xlRow, c });
+          if (!ws[addr]) ws[addr] = { t: 's', v: '' };
+          ws[addr].s = {
+            border: {
+              left:   bMedium,
+              right:  bMedium,
+              top:    row.isFirst  ? bMedium : bThin,
+              bottom: row.isLast   ? bMedium : bThin,
+            },
+            alignment: c === lastC ? { wrapText: true, vertical: 'top' } : { vertical: 'top' }
+          };
+        }
+      });
+
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, 'Zestawienie');
+      XLSX.writeFile(wb, `Urlopy_${period}.xlsx`);
+    }
+
+    // ---- SZCZEGÓŁY PRACOWNIKA ----
+    function getWorkingDaysList(startStr, endStr) {
+      const s = fmtDate(startStr);
+      const e = fmtDate(endStr);
+      if (s === '–' || e === '–') return [];
+      const [sy, sm, sd] = s.split('-').map(Number);
+      const [ey, em, ed] = e.split('-').map(Number);
+      const hols = new Set();
+      for (let y = sy; y <= ey; y++) getHolidays(y).forEach(h => hols.add(h));
+      const days = [];
+      let cur = Date.UTC(sy, sm - 1, sd);
+      const end = Date.UTC(ey, em - 1, ed);
+      while (cur <= end) {
+        const dt = new Date(cur);
+        const dw = dt.getUTCDay();
+        const ds = dt.toISOString().slice(0, 10);
+        if (dw && dw !== 6 && !hols.has(ds)) days.push(ds);
+        cur += 86400000;
+      }
+      return days;
+    }
+
+    async function openEmpDetail(userId, userName) {
+      const date_from = document.getElementById('reportFrom').value;
+      const date_to   = document.getElementById('reportTo').value;
+      const colorMap  = {};
+      leaveTypesCache.forEach(lt => { colorMap[lt.kod] = lt.kolor || '#42A5F5'; });
+
+      document.getElementById('empDetailTitle').textContent  = userName;
+      document.getElementById('empDetailPeriod').textContent = `Okres: ${date_from} – ${date_to}`;
+      document.getElementById('empDetailBody').innerHTML = '<div class="text-center text-muted py-3">Ładowanie...</div>';
+      new bootstrap.Modal(document.getElementById('modalEmpDetail')).show();
+
+      const data = await API.getEmployeeReport(userId, date_from, date_to);
+      if (!data.success) {
+        document.getElementById('empDetailBody').innerHTML = `<div class="text-danger py-2">${data.message}</div>`;
+        return;
+      }
+
+      if (!data.data.length) {
+        document.getElementById('empDetailBody').innerHTML = '<div class="text-center text-muted py-3">Brak urlopów w tym okresie</div>';
+        document.getElementById('empDetailFoot').innerHTML = '';
+        return;
+      }
+
+      const DAY_SHORT_PL = ['Nd','Pn','Wt','Śr','Cz','Pt','Sb'];
+      let totalDni = 0;
+
+      document.getElementById('empDetailBody').innerHTML = data.data.map((r, i, arr) => {
+        const col = colorMap[r.typ_urlopu] || '#42A5F5';
+        totalDni += Number(r.dni_robocze) || 0;
+
+        const workDays = getWorkingDaysList(r.start_date, r.end_date);
+        const daysHtml = workDays.map(d => {
+          const dt = new Date(d);
+          const dn = DAY_SHORT_PL[dt.getUTCDay()];
+          const dm = `${String(dt.getUTCDate()).padStart(2,'0')}.${String(dt.getUTCMonth()+1).padStart(2,'0')}`;
+          return `<span style="display:inline-block;background:${col}18;color:${col};border:1px solid ${col}44;border-radius:3px;padding:1px 7px;margin:2px 2px;font-size:12px;white-space:nowrap">${dm} <span style="opacity:.75">${dn}</span></span>`;
+        }).join('');
+
+        const isLast = i === arr.length - 1;
+        return `<div style="padding:10px 0;${isLast ? '' : 'border-bottom:1px solid #e9ecef'}">
+          <div class="d-flex align-items-center gap-2 mb-2 flex-wrap">
+            <span style="display:inline-block;width:12px;height:12px;border-radius:3px;background:${col};flex-shrink:0"></span>
+            <strong style="font-size:13px">${r.typ_urlopu}</strong>
+            <span class="text-muted small">${fmtDate(r.start_date)} – ${fmtDate(r.end_date)}</span>
+            <span class="badge bg-secondary ms-auto">${r.dni_robocze} dni</span>
+          </div>
+          <div style="line-height:2">${daysHtml}</div>
+          ${r.reason ? `<div class="text-muted small mt-1 fst-italic">${r.reason}</div>` : ''}
+        </div>`;
+      }).join('');
+
+      document.getElementById('empDetailFoot').innerHTML =
+        `<span class="text-muted">Razem: <strong>${totalDni} dni</strong></span>`;
+    }
+
+    // ---- EVENTY ZAKŁADEK ----
+    document.querySelector('[href="#tabEmployees"]').addEventListener('shown.bs.tab', loadUsers);
+    document.querySelector('[href="#tabSettings"]').addEventListener('shown.bs.tab', loadLeaveTypes);
+    document.querySelector('[href="#tabCalendar"]').addEventListener('shown.bs.tab', loadCalendar);
+    document.querySelector('[href="#tabReport"]').addEventListener('shown.bs.tab', loadReport);
+
+    loadRequests();
+    API.getLeaveTypes().then(d => { if (d.success) leaveTypesCache = d.data; });
+  </script>
+</body>
+</html>
