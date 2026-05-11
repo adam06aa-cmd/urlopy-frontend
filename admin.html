@@ -115,6 +115,7 @@
                 <th>Wykorzystano</th>
                 <th>Pozostało</th>
                 <th>Badania lekarskie</th>
+                <th title="Czy pracownik pojawia się w zestawieniu XLSX">W zestawieniu XLSX</th>
                 <th>Akcje</th>
               </tr>
             </thead>
@@ -169,6 +170,16 @@
           <button class="btn btn-primary btn-sm" onclick="loadReport()">Pokaż</button>
           <button class="btn btn-success btn-sm" onclick="exportReportXLSX()">&#11015; Pobierz XLSX</button>
         </div>
+        <div class="d-flex align-items-center gap-2 mb-3 flex-wrap" id="reportFilterRow" style="display:none">
+          <select id="filterReportEmployee" class="form-select form-select-sm" style="width:220px" onchange="renderReport()">
+            <option value="">Wszyscy pracownicy</option>
+          </select>
+          <select id="filterReportType" class="form-select form-select-sm" style="width:200px" onchange="renderReport()">
+            <option value="">Wszystkie typy urlopu</option>
+          </select>
+          <button class="btn btn-outline-secondary btn-sm" onclick="clearReportFilters()">&#x2715; Wyczyść filtry</button>
+        </div>
+        <div id="reportSummary"></div>
         <div id="alertReport" class="alert d-none"></div>
         <div class="table-responsive">
           <table class="table table-bordered table-hover table-sm" id="reportTable">
@@ -201,6 +212,7 @@
                         <th>Wlicza w podstawę</th>
                         <th>Limit dni</th>
                         <th>Aktywny</th>
+                        <th class="text-center">Ukryj w XLSX</th>
                         <th>Akcje</th>
                       </tr>
                     </thead>
@@ -210,6 +222,24 @@
               </div>
             </div>
           </div>
+
+          <div class="col-12">
+            <div class="card">
+              <div class="card-header">
+                <h6 class="mb-0">Powiadomienia email</h6>
+              </div>
+              <div class="card-body">
+                <p class="text-muted small mb-2">Podaj adresy email (oddzielone przecinkiem), na które będzie wysyłane powiadomienie gdy pracownik złoży wniosek urlopowy.</p>
+                <div id="alertEmailSettings" class="alert d-none mb-3"></div>
+                <div class="mb-3">
+                  <label class="form-label">Adresy email do powiadomień</label>
+                  <input type="text" id="notificationEmails" class="form-control" placeholder="np. manager@firma.pl, hr@firma.pl">
+                </div>
+                <button class="btn btn-primary" onclick="saveNotificationEmails()">Zapisz</button>
+              </div>
+            </div>
+          </div>
+
         </div>
       </div>
 
@@ -248,21 +278,21 @@
         <div class="modal-body">
           <div class="mb-2">
             <label class="form-label">Imię i nazwisko</label>
-            <input type="text" id="newUserName" class="form-control">
+            <input type="text" id="newUserName" class="form-control" autocomplete="off">
           </div>
           <div class="mb-2">
             <label class="form-label">Email</label>
-            <input type="email" id="newUserEmail" class="form-control">
+            <input type="email" id="newUserEmail" class="form-control" autocomplete="off">
           </div>
           <div class="mb-2">
             <label class="form-label">Login <span class="text-muted small">(do logowania, np. jkowalski)</span></label>
-            <input type="text" id="newUserLogin" class="form-control" placeholder="np. jkowalski">
+            <input type="text" id="newUserLogin" class="form-control" placeholder="np. jkowalski" autocomplete="off">
             <div class="form-text">Jeśli puste — pracownik loguje się emailem</div>
           </div>
           <div class="mb-2">
             <label class="form-label">Hasło tymczasowe</label>
             <div class="input-group">
-              <input type="password" id="newUserPassword" class="form-control">
+              <input type="password" id="newUserPassword" class="form-control" autocomplete="new-password">
               <button class="btn btn-outline-secondary" type="button" onclick="togglePasswordVisibility('newUserPassword', this)" title="Pokaż/ukryj">&#x1F441;</button>
             </div>
           </div>
@@ -328,7 +358,7 @@
             <input type="text" id="editUserName" class="form-control">
           </div>
           <div class="mb-2">
-            <label class="form-label">Email <span class="text-danger">*</span></label>
+            <label class="form-label">Email</label>
             <input type="email" id="editUserEmail" class="form-control">
           </div>
           <div class="mb-2">
@@ -356,9 +386,10 @@
           <div class="mb-2">
             <label class="form-label">Nowe hasło <span class="text-muted small">(zostaw puste, żeby nie zmieniać)</span></label>
             <div class="input-group">
-              <input type="password" id="editUserPassword" class="form-control" placeholder="Opcjonalne">
+              <input type="password" id="editUserPassword" class="form-control" placeholder="Wpisz nowe hasło">
               <button class="btn btn-outline-secondary" type="button" onclick="togglePasswordVisibility('editUserPassword', this)" title="Pokaż/ukryj">&#x1F441;</button>
             </div>
+            <div class="form-text text-muted">Obecnego hasła nie można wyświetlić — wpisz nowe, żeby je zmienić</div>
           </div>
           <hr>
           <h6 class="text-muted mb-3">Urlopy</h6>
@@ -382,6 +413,11 @@
             </div>
           </div>
           <div class="mt-3 p-2 bg-light rounded small text-muted" id="editLeaveInfo"></div>
+          <hr>
+          <div class="form-check form-switch mt-2">
+            <input class="form-check-input" type="checkbox" id="editExportExcel" checked>
+            <label class="form-check-label" for="editExportExcel">Uwzględnij w zestawieniu XLSX</label>
+          </div>
         </div>
         <div class="modal-footer">
           <button class="btn btn-secondary" data-bs-dismiss="modal">Anuluj</button>
@@ -619,6 +655,10 @@
               <div class="form-check" id="ltAktywnyRow" style="display:none!important">
                 <input class="form-check-input" type="checkbox" id="ltAktywny" checked>
                 <label class="form-check-label" for="ltAktywny">Aktywny</label>
+              </div>
+              <div class="form-check">
+                <input class="form-check-input" type="checkbox" id="ltUkryj">
+                <label class="form-check-label" for="ltUkryj">Ukryj w zestawieniu XLSX</label>
               </div>
             </div>
           </div>
@@ -862,7 +902,7 @@
       if (!data.success) return;
       const tbody = document.getElementById('usersTable');
       if (!data.data.length) {
-        tbody.innerHTML = '<tr><td colspan="11" class="text-center text-muted">Brak pracowników</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="12" class="text-center text-muted">Brak pracowników</td></tr>';
         return;
       }
       tbody.innerHTML = data.data.map(u => {
@@ -894,6 +934,12 @@
           </td>
           <td><strong class="${left===0?'text-danger':left<=3?'text-warning':'text-success'}">${left} dni</strong></td>
           <td>${badaniaBadge(u.data_badan, u.waznosc_badan)}</td>
+          <td class="text-center">
+            <div class="form-check form-switch d-flex justify-content-center mb-0">
+              <input class="form-check-input" type="checkbox" ${u.export_to_excel !== false ? 'checked' : ''}
+                onchange="toggleExcel(${u.id}, this.checked)" title="Uwzględnij w zestawieniu XLSX">
+            </div>
+          </td>
           <td>
             ${zwolniony ? `
               <button class="btn btn-outline-success btn-sm" onclick="przywrocUser(${u.id},'${u.name}')">Przywróć</button>
@@ -920,7 +966,7 @@
       const etat              = document.getElementById('newUserEtat').value;
       const wymiar            = parseInt(document.getElementById('newUserWymiar').value)||26;
       const zalegly           = parseInt(document.getElementById('newUserZalegly').value)||0;
-      if (!name||!email||!password) return alert('Wypełnij wszystkie pola');
+      if (!name||!password) return alert('Wypełnij imię i nazwisko oraz hasło');
       const data = await API.createUser(name, email, password, etat, wymiar, zalegly, stanowisko, login, data_zatrudnienia, data_badan, waznosc_badan);
       bootstrap.Modal.getInstance(document.getElementById('modalAddUser')).hide();
       if (data.success) { loadUsers(); showAlert('alertUsers', data.message, 'success'); }
@@ -943,6 +989,7 @@
       document.getElementById('editEtat').value                     = u.etat || '1';
       document.getElementById('editWymiar').value                   = u.urlop_wymiar ?? 26;
       document.getElementById('editZalegly').value                  = u.urlop_zalegly ?? 0;
+      document.getElementById('editExportExcel').checked             = u.export_to_excel !== false;
       const left = Math.max(total - used, 0);
       document.getElementById('editLeaveInfo').innerHTML =
         `Wykorzystano w tym roku: <strong>${used} dni</strong> &nbsp;|&nbsp; Pozostało: <strong>${left} dni</strong>`;
@@ -961,12 +1008,14 @@
       const etat              = document.getElementById('editEtat').value;
       const wymiar            = parseInt(document.getElementById('editWymiar').value);
       const zalegly           = parseInt(document.getElementById('editZalegly').value);
-      if (!name || !email) return alert('Imię i email są wymagane');
+      if (!name) return alert('Imię i nazwisko jest wymagane');
 
+      const exportExcel = document.getElementById('editExportExcel').checked;
       const [d1, d2] = await Promise.all([
         API.updateUser(editUserId, name, email, password || null, stanowisko, login, data_zatrudnienia, data_badan, waznosc_badan),
         API.updateUserLeave(editUserId, etat, wymiar, zalegly)
       ]);
+      await API.toggleExcel(editUserId, exportExcel);
 
       bootstrap.Modal.getInstance(document.getElementById('modalEditUser')).hide();
       if (d1.success && d2.success) { loadUsers(); showAlert('alertUsers', 'Dane pracownika zapisane', 'success'); }
@@ -992,6 +1041,10 @@
       const res = await API.przywrocUser(id);
       if (res.success) { loadUsers(); showAlert('alertUsers', res.message, 'success'); }
       else { showAlert('alertUsers', res.message, 'danger'); }
+    }
+
+    async function toggleExcel(id, val) {
+      await API.toggleExcel(id, val);
     }
 
     async function deleteUser(id, name) {
@@ -1063,7 +1116,7 @@
       if (!data.success) return;
       const tbody = document.getElementById('leaveTypesTable');
       if (!data.data.length) {
-        tbody.innerHTML = '<tr><td colspan="7" class="text-center text-muted">Brak rodzajów urlopów</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="8" class="text-center text-muted">Brak rodzajów urlopów</td></tr>';
         return;
       }
       tbody.innerHTML = data.data.map(t => `
@@ -1078,6 +1131,7 @@
           <td>${t.wlicza_w_podstawe ? '<span class="badge bg-primary">Podstawowy</span>' : '<span class="badge bg-warning text-dark">Dodatkowy</span>'}</td>
           <td>${t.limit_dni != null ? `${t.limit_dni} dni` : '<span class="text-muted">Bez limitu</span>'}</td>
           <td>${t.aktywny ? '<span class="badge bg-success">Tak</span>' : '<span class="badge bg-secondary">Nie</span>'}</td>
+          <td class="text-center">${t.ukryj_w_zestawieniu ? '<span class="badge bg-warning text-dark">Ukryty</span>' : '<span class="text-muted">–</span>'}</td>
           <td>
             <button class="btn btn-outline-primary btn-sm me-1" onclick='openEditLeaveType(${JSON.stringify(t)})'>Edytuj</button>
             <button class="btn btn-outline-danger btn-sm" onclick="removeLeaveType(${t.id},'${t.nazwa}')">Usuń</button>
@@ -1098,6 +1152,7 @@
       document.getElementById('ltPlatny').checked  = true;
       document.getElementById('ltWlicza').checked  = true;
       document.getElementById('ltAktywny').checked = true;
+      document.getElementById('ltUkryj').checked   = false;
       new bootstrap.Modal(document.getElementById('modalLeaveType')).show();
     }
 
@@ -1113,6 +1168,7 @@
       document.getElementById('ltPlatny').checked  = t.platny;
       document.getElementById('ltWlicza').checked  = t.wlicza_w_podstawe;
       document.getElementById('ltAktywny').checked = t.aktywny;
+      document.getElementById('ltUkryj').checked   = !!t.ukryj_w_zestawieniu;
       new bootstrap.Modal(document.getElementById('modalLeaveType')).show();
     }
 
@@ -1124,16 +1180,17 @@
       const kolor            = document.getElementById('ltKolor').value;
       const platny           = document.getElementById('ltPlatny').checked;
       const wlicza_w_podstawe = document.getElementById('ltWlicza').checked;
-      const aktywny          = document.getElementById('ltAktywny').checked;
+      const aktywny             = document.getElementById('ltAktywny').checked;
+      const ukryj_w_zestawieniu = document.getElementById('ltUkryj').checked;
 
       if (!nazwa) return alert('Podaj nazwę');
 
       let data;
       if (editLeaveTypeId) {
-        data = await API.updateLeaveType(editLeaveTypeId, { nazwa, opis, platny, limit_dni, aktywny, wlicza_w_podstawe, kolor });
+        data = await API.updateLeaveType(editLeaveTypeId, { nazwa, opis, platny, limit_dni, aktywny, wlicza_w_podstawe, kolor, ukryj_w_zestawieniu });
       } else {
         if (!kod) return alert('Podaj kod');
-        data = await API.createLeaveType({ nazwa, kod, opis, platny, limit_dni, wlicza_w_podstawe, kolor });
+        data = await API.createLeaveType({ nazwa, kod, opis, platny, limit_dni, wlicza_w_podstawe, kolor, ukryj_w_zestawieniu });
       }
 
       bootstrap.Modal.getInstance(document.getElementById('modalLeaveType')).hide();
@@ -1476,6 +1533,9 @@
       }
       reportData       = data.data;
       reportLeaveTypes = data.leave_types;
+      document.getElementById('reportFilterRow').style.display = '';
+      document.getElementById('filterReportEmployee').value = '';
+      document.getElementById('filterReportType').value = '';
       renderReport();
     }
 
@@ -1483,10 +1543,65 @@
       const colorMap = {};
       leaveTypesCache.forEach(lt => { colorMap[lt.kod] = lt.kolor || '#42A5F5'; });
 
-      const lts = reportLeaveTypes;
+      const empSel    = document.getElementById('filterReportEmployee');
+      const typeSel   = document.getElementById('filterReportType');
+      const selEmpId  = empSel ? empSel.value : '';
+      const selTypeKod = typeSel ? typeSel.value : '';
+
+      // Wypełnij dropdowny (zachowaj aktualny wybór)
+      if (empSel) {
+        empSel.innerHTML = '<option value="">Wszyscy pracownicy</option>' +
+          reportData.map(e => `<option value="${e.id}"${String(e.id) === selEmpId ? ' selected' : ''}>${e.name}</option>`).join('');
+      }
+      if (typeSel) {
+        typeSel.innerHTML = '<option value="">Wszystkie typy urlopu</option>' +
+          reportLeaveTypes.map(lt => `<option value="${lt.kod}"${lt.kod === selTypeKod ? ' selected' : ''}>${lt.nazwa}</option>`).join('');
+      }
+
+      // Kolumny — jeśli wybrany typ, tylko ten; inaczej wszystkie
+      const lts = selTypeKod ? reportLeaveTypes.filter(lt => lt.kod === selTypeKod) : reportLeaveTypes;
+
+      // Wiersze — filtruj pracownika i typ
+      const filtered = reportData.filter(emp => {
+        if (selEmpId && String(emp.id) !== selEmpId) return false;
+        if (!selEmpId && emp.razem === 0) return false;
+        if (selTypeKod && !(emp.urlopy[selTypeKod] > 0)) return false;
+        return true;
+      });
+
       const date_from = document.getElementById('reportFrom').value;
       const date_to   = document.getElementById('reportTo').value;
       const period    = `${date_from} – ${date_to}`;
+
+      // Podsumowanie gdy wybrany konkretny pracownik
+      const summaryEl = document.getElementById('reportSummary');
+      if (summaryEl) {
+        if (selEmpId && filtered.length === 1) {
+          const emp = filtered[0];
+          const usedTypes = reportLeaveTypes.filter(lt => emp.urlopy[lt.kod] > 0);
+          summaryEl.innerHTML = `<div class="card border-primary mb-3">
+            <div class="card-body py-2 px-3">
+              <div class="d-flex justify-content-between align-items-start flex-wrap gap-2">
+                <div>
+                  <strong>${emp.name}</strong> — podsumowanie urlopów (${period})
+                  <div class="d-flex flex-wrap gap-2 mt-2">
+                    ${usedTypes.length ? usedTypes.map(lt => {
+                      const col = colorMap[lt.kod] || '#42A5F5';
+                      return `<span style="background:${col}22;color:${col};border:1px solid ${col}55;border-radius:5px;padding:4px 12px;font-weight:600;font-size:13px">${lt.nazwa}: ${emp.urlopy[lt.kod]} dni</span>`;
+                    }).join('') : '<span class="text-muted small">Brak urlopów w tym okresie</span>'}
+                  </div>
+                </div>
+                <div class="text-end">
+                  <span class="badge bg-secondary fs-6">Razem: ${emp.razem} dni</span><br>
+                  <a href="#" class="small mt-1 d-inline-block" onclick="openEmpDetail(${emp.id},'${emp.name.replace(/'/g,"\\'")}');return false;">Szczegóły ↗</a>
+                </div>
+              </div>
+            </div>
+          </div>`;
+        } else {
+          summaryEl.innerHTML = '';
+        }
+      }
 
       // Nagłówek
       let headHtml = `<tr><th colspan="${lts.length + 3}" class="text-center py-2" style="background:#1976D2;color:#fff;font-size:14px">Zestawienie urlopów — ${period}</th></tr>`;
@@ -1504,8 +1619,6 @@
       const totals = {};
       lts.forEach(lt => { totals[lt.kod] = 0; });
       let totalRazem = 0;
-
-      const filtered = reportData.filter(emp => emp.razem > 0);
 
       const bodyRows = filtered.map(emp => {
         let row = `<tr>
@@ -1527,15 +1640,22 @@
       document.getElementById('reportBody').innerHTML = bodyRows.join('') ||
         `<tr><td colspan="${lts.length + 3}" class="text-center text-muted py-3">Brak urlopów w wybranym okresie</td></tr>`;
 
-      // Stopka — sumy (tylko kolumny z niezerowymi wartościami)
+      // Stopka — sumy
       let footHtml = '<tr><td colspan="2"><strong>Suma</strong></td>';
       lts.forEach(lt => { footHtml += `<td class="text-center"><strong>${totals[lt.kod]||0}</strong></td>`; });
       footHtml += `<td class="text-center"><strong>${totalRazem}</strong></td></tr>`;
       document.getElementById('reportFoot').innerHTML = footHtml;
     }
 
+    function clearReportFilters() {
+      document.getElementById('filterReportEmployee').value = '';
+      document.getElementById('filterReportType').value = '';
+      renderReport();
+    }
+
     function exportReportXLSX() {
       if (!reportData.length) { alert('Najpierw wczytaj zestawienie'); return; }
+      const xlsxData = reportData.filter(e => e.export_to_excel !== false);
       const lts       = reportLeaveTypes;
       const date_from = document.getElementById('reportFrom').value;
       const date_to   = document.getElementById('reportTo').value;
@@ -1573,15 +1693,15 @@
       const ltNames = {};
       lts.forEach(lt => { ltNames[lt.kod] = lt.nazwa; });
 
-      // Tylko typy urlopów faktycznie wykorzystanych w okresie
-      const ltsUsed = lts.filter(lt => reportData.some(emp => (emp.urlopy[lt.kod] || 0) > 0));
+      // Tylko typy faktycznie wykorzystane i nie ukryte w XLSX
+      const ltsUsed = lts.filter(lt => !lt.ukryj_w_zestawieniu && xlsxData.some(emp => (emp.urlopy[lt.kod] || 0) > 0));
 
       const header = ['Pracownik', ...ltsUsed.map(lt => lt.nazwa), 'Razem', 'Konkretne dni urlopu'];
 
       // Buduj wiersze z informacją o granicach grup pracownika
       const rowsMeta = []; // { cells, isFirst, isLast }
 
-      reportData.filter(emp => emp.razem > 0).forEach(emp => {
+      xlsxData.filter(emp => emp.razem > 0).forEach(emp => {
         const reqs = emp.requests || [];
         const emptyLeave = ltsUsed.map(() => '');
 
@@ -1602,8 +1722,8 @@
         });
       });
 
-      const totals = ltsUsed.map(lt => reportData.reduce((s, e) => s + (e.urlopy[lt.kod]||0), 0));
-      const totalRazem = reportData.reduce((s, e) => s + (e.razem||0), 0);
+      const totals = ltsUsed.map(lt => xlsxData.reduce((s, e) => s + (e.urlopy[lt.kod]||0), 0));
+      const totalRazem = xlsxData.reduce((s, e) => s + (e.razem||0), 0);
 
       const titleRow  = [`Zestawienie urlopów — ${date_from} – ${date_to}`, ...Array(header.length - 1).fill('')];
       const ws = XLSX.utils.aoa_to_sheet([titleRow, header, ...rowsMeta.map(r => r.cells), ['SUMA', ...totals, totalRazem, '']]);
@@ -1737,9 +1857,55 @@
 
     // ---- EVENTY ZAKŁADEK ----
     document.querySelector('[href="#tabEmployees"]').addEventListener('shown.bs.tab', loadUsers);
-    document.querySelector('[href="#tabSettings"]').addEventListener('shown.bs.tab', loadLeaveTypes);
+    document.querySelector('[href="#tabSettings"]').addEventListener('shown.bs.tab', () => {
+      loadLeaveTypes();
+      loadNotificationEmails();
+    });
     document.querySelector('[href="#tabCalendar"]').addEventListener('shown.bs.tab', loadCalendar);
     document.querySelector('[href="#tabReport"]').addEventListener('shown.bs.tab', loadReport);
+
+    async function loadNotificationEmails() {
+      try {
+        const res = await fetch(`${API_URL}/settings`, { headers: { Authorization: `Bearer ${localStorage.getItem('token')}` } });
+        const d = await res.json();
+        if (d.success) {
+          document.getElementById('notificationEmails').value = d.data.notification_emails || '';
+        }
+      } catch {}
+    }
+
+    async function saveNotificationEmails() {
+      const emails = document.getElementById('notificationEmails').value.trim();
+      const alertEl = document.getElementById('alertEmailSettings');
+      try {
+        const res = await fetch(`${API_URL}/settings`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${localStorage.getItem('token')}` },
+          body: JSON.stringify({ notification_emails: emails }),
+        });
+        const d = await res.json();
+        alertEl.className = `alert ${d.success ? 'alert-success' : 'alert-danger'}`;
+        alertEl.textContent = d.success ? 'Zapisano' : (d.message || 'Błąd');
+        alertEl.classList.remove('d-none');
+        setTimeout(() => alertEl.classList.add('d-none'), 3000);
+      } catch {
+        alertEl.className = 'alert alert-danger';
+        alertEl.textContent = 'Błąd połączenia';
+        alertEl.classList.remove('d-none');
+      }
+    }
+
+    document.getElementById('modalAddUser').addEventListener('show.bs.modal', () => {
+      ['newUserName','newUserEmail','newUserLogin','newUserPassword','newUserStanowisko',
+       'newUserDataZatrudnienia','newUserDataBadan','newUserWaznoscBadan'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.value = '';
+      });
+      const wymiar = document.getElementById('newUserWymiar');
+      if (wymiar) wymiar.value = '1';
+      const zalegly = document.getElementById('newUserZalegly');
+      if (zalegly) zalegly.value = '0';
+    });
 
     loadRequests();
     API.getLeaveTypes().then(d => { if (d.success) leaveTypesCache = d.data; });
