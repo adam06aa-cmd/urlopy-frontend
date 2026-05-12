@@ -1,4 +1,4 @@
-const API_URL = 'https://urlopy-backend-production.up.railway.app/api';
+const API_URL = 'https://urlopy-backend.onrender.com/api';
 
 const API = {
   async login(email, password) {
@@ -187,6 +187,15 @@ const API = {
     const res = await fetch(`${API_URL}/requests/${id}`, {
       method: 'DELETE',
       headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+    });
+    return res.json();
+  },
+
+  async toggleExcel(id, val) {
+    const res = await fetch(`${API_URL}/users/${id}/excel-toggle`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${localStorage.getItem('token')}` },
+      body: JSON.stringify({ export_to_excel: val })
     });
     return res.json();
   },
