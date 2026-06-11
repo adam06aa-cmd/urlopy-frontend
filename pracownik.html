@@ -113,6 +113,7 @@
             </div>
           </div>
           <div id="reqDaysInfo" class="alert alert-info py-2 d-none"></div>
+          <div id="reqConflictWarn" class="alert d-none py-2 small"></div>
           <div class="mb-2">
             <label class="form-label">Powód / uwagi <span class="text-muted small">(opcjonalne)</span></label>
             <textarea id="reqReason" class="form-control" rows="3" placeholder="Opcjonalnie podaj powód..."></textarea>
@@ -186,6 +187,7 @@
     async function loadRequests() {
       const data = await API.getRequests();
       if (!data.success) return;
+      myRequests = data.data;
       const tbody = document.getElementById('requestsTable');
       if (!data.data.length) {
         tbody.innerHTML = '<tr><td colspan="7" class="text-center text-muted py-4">Nie złożyłeś jeszcze żadnego wniosku</td></tr>';
@@ -204,6 +206,7 @@
     }
 
     let leaveTypesData = [];
+    let myRequests = [];
 
     async function loadLeaveTypes() {
       const data = await API.getLeaveTypes();
@@ -214,6 +217,44 @@
         .filter(t => t.aktywny)
         .map(t => `<option value="${t.kod}">${t.nazwa}${t.limit_dni ? ` (max ${t.limit_dni} dni/rok)` : ''}</option>`)
         .join('');
+    }
+
+    function checkRequestConflicts() {
+      const start = document.getElementById('reqStart').value;
+      const end   = document.getElementById('reqEnd').value;
+      const typ   = document.getElementById('reqTyp').value;
+      const warn  = document.getElementById('reqConflictWarn');
+      warn.className = 'alert d-none py-2 small';
+      if (!start || !end || start > end) return;
+
+      // 1. Nakładające się daty
+      const conflict = myRequests.find(r =>
+        r.status !== 'rejected' &&
+        String(r.start_date).slice(0, 10) <= end &&
+        String(r.end_date).slice(0, 10)   >= start
+      );
+      if (conflict) {
+        warn.className = 'alert alert-danger py-2 small';
+        warn.textContent = `Masz już urlop w terminie ${fmtDate(conflict.start_date)} – ${fmtDate(conflict.end_date)}. Nie możesz złożyć nakładającego się wniosku.`;
+        return;
+      }
+
+      // 2. Limit roczny dla wybranego typu
+      const typData = leaveTypesData.find(t => t.kod === typ);
+      if (typData && typData.limit_dni != null) {
+        const year = start.slice(0, 4);
+        const used = myRequests
+          .filter(r => r.status !== 'rejected' && r.typ_urlopu === typ && String(r.start_date).slice(0, 4) === year)
+          .reduce((sum, r) => sum + (Number(r.dni_robocze) || 0), 0);
+        const requesting = countWorkingDays(start, end);
+        if (used + requesting > typData.limit_dni) {
+          const remaining = Math.max(typData.limit_dni - used, 0);
+          warn.className = 'alert alert-danger py-2 small';
+          warn.textContent = remaining === 0
+            ? `Urlop wyczerpany — wykorzystałeś już cały limit (${typData.limit_dni} dni/rok) dla tego rodzaju urlopu.`
+            : `Przekroczono limit — możesz wziąć jeszcze ${remaining} ${remaining === 1 ? 'dzień' : 'dni'} (limit: ${typData.limit_dni} dni/rok).`;
+        }
+      }
     }
 
     document.getElementById('reqTyp').addEventListener('change', async () => {
@@ -231,6 +272,7 @@
       } else {
         warn.className = 'alert d-none';
       }
+      checkRequestConflicts();
     });
 
     // Podgląd liczby dni przy wyborze dat
@@ -249,6 +291,7 @@
         } else {
           info.className = 'alert alert-info py-2 d-none';
         }
+        checkRequestConflicts();
       });
     });
 
@@ -259,6 +302,10 @@
       const reason = document.getElementById('reqReason').value.trim();
       if (!start || !end) return alert('Podaj daty urlopu');
       if (start > end)   return alert('Data końcowa musi być po startowej');
+      const conflictWarn = document.getElementById('reqConflictWarn');
+      if (conflictWarn && conflictWarn.classList.contains('alert-danger')) {
+        return;
+      }
 
       const data = await API.createRequest(start, end, typ, reason);
       bootstrap.Modal.getInstance(document.getElementById('modalNewRequest')).hide();

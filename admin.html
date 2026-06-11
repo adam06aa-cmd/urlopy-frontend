@@ -88,9 +88,10 @@
 
       <!-- ===== PRACOWNICY ===== -->
       <div class="tab-pane fade" id="tabEmployees">
-        <div class="d-flex justify-content-between align-items-center mb-3">
+        <div class="d-flex justify-content-between align-items-center mb-2">
           <h5 class="mb-0">Pracownicy</h5>
-          <div class="d-flex gap-2 align-items-center">
+          <div class="d-flex gap-2 align-items-center flex-wrap">
+            <input type="search" id="searchUsers" class="form-control form-control-sm" placeholder="&#128269; Szukaj..." style="width:200px" oninput="renderUsers()">
             <div class="form-check form-switch mb-0">
               <input class="form-check-input" type="checkbox" id="toggleZwolnieni" onchange="loadUsers()">
               <label class="form-check-label small text-muted" for="toggleZwolnieni">Pokaż zwolnionych</label>
@@ -105,16 +106,16 @@
           <table class="table table-hover">
             <thead class="table-light">
               <tr>
-                <th>Imię i nazwisko</th>
-                <th>Stanowisko</th>
-                <th>Login</th>
-                <th>Email</th>
-                <th>Etat</th>
-                <th>Urlop w tym roku</th>
-                <th>Zaległy</th>
-                <th>Wykorzystano</th>
-                <th>Pozostało</th>
-                <th>Badania lekarskie</th>
+                <th style="cursor:pointer;user-select:none;white-space:nowrap" onclick="sortUsers('name')">Imię i nazwisko <span id="sortIco_name" class="text-primary"></span></th>
+                <th style="cursor:pointer;user-select:none;white-space:nowrap" onclick="sortUsers('stanowisko')">Stanowisko <span id="sortIco_stanowisko" class="text-primary"></span></th>
+                <th style="cursor:pointer;user-select:none;white-space:nowrap" onclick="sortUsers('login')">Login <span id="sortIco_login" class="text-primary"></span></th>
+                <th style="cursor:pointer;user-select:none;white-space:nowrap" onclick="sortUsers('email')">Email <span id="sortIco_email" class="text-primary"></span></th>
+                <th style="cursor:pointer;user-select:none;white-space:nowrap" onclick="sortUsers('etat')">Etat <span id="sortIco_etat" class="text-primary"></span></th>
+                <th style="cursor:pointer;user-select:none;white-space:nowrap" onclick="sortUsers('urlop_wymiar')">Urlop w tym roku <span id="sortIco_urlop_wymiar" class="text-primary"></span></th>
+                <th style="cursor:pointer;user-select:none;white-space:nowrap" onclick="sortUsers('urlop_zalegly')">Zaległy <span id="sortIco_urlop_zalegly" class="text-primary"></span></th>
+                <th style="cursor:pointer;user-select:none;white-space:nowrap" onclick="sortUsers('urlop_wykorzystany')">Wykorzystano <span id="sortIco_urlop_wykorzystany" class="text-primary"></span></th>
+                <th style="cursor:pointer;user-select:none;white-space:nowrap" onclick="sortUsers('left')">Pozostało <span id="sortIco_left" class="text-primary"></span></th>
+                <th style="cursor:pointer;user-select:none;white-space:nowrap" onclick="sortUsers('waznosc_badan')">Badania lekarskie <span id="sortIco_waznosc_badan" class="text-primary"></span></th>
                 <th title="Czy pracownik pojawia się w zestawieniu XLSX">W zestawieniu XLSX</th>
                 <th>Akcje</th>
               </tr>
@@ -129,6 +130,10 @@
         <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
           <h5 class="mb-0">Kalendarz urlopów</h5>
           <div class="d-flex align-items-center gap-2 flex-wrap">
+            <div class="form-check form-switch mb-0 me-1">
+              <input class="form-check-input" type="checkbox" id="calShowAll" onchange="renderCalendar()">
+              <label class="form-check-label small text-muted" for="calShowAll">Pokaż wszystkich pracowników</label>
+            </div>
             <select id="calFilterStanowisko" class="form-select form-select-sm w-auto" onchange="renderCalendar()">
               <option value="">Wszystkie stanowiska</option>
             </select>
@@ -688,6 +693,9 @@
     let editUserId = null;
     let editRequestId = null;
     let leaveTypesCache = [];
+    let usersData = [];
+    let usersSortCol = null;
+    let usersSortDir = 1;
 
     function logout() { localStorage.clear(); window.location.href = 'login-admin.html'; }
 
@@ -768,7 +776,9 @@
     // ---- WNIOSKI ----
     function renderRequests() {
       const filter = document.getElementById('filterStatus').value;
-      const filtered = filter ? allRequests.filter(r => r.status === filter) : allRequests;
+      const filtered = (filter ? allRequests.filter(r => r.status === filter) : allRequests)
+        .slice()
+        .sort((a, b) => String(a.start_date).localeCompare(String(b.start_date)));
       document.getElementById('badgePending').textContent = allRequests.filter(r => r.status === 'pending').length;
       const tbody = document.getElementById('requestsTable');
       if (!filtered.length) {
@@ -900,12 +910,58 @@
       const data = await API.getUsers(showAll);
       if (!checkAuth(data)) return;
       if (!data.success) return;
+      usersData = data.data;
+      renderUsers();
+    }
+
+    function sortUsers(col) {
+      if (usersSortCol === col) {
+        usersSortDir *= -1;
+      } else {
+        usersSortCol = col;
+        usersSortDir = 1;
+      }
+      document.querySelectorAll('[id^="sortIco_"]').forEach(el => { el.textContent = ''; });
+      const ico = document.getElementById('sortIco_' + col);
+      if (ico) ico.textContent = usersSortDir === 1 ? '▲' : '▼';
+      renderUsers();
+    }
+
+    function renderUsers() {
+      const search = (document.getElementById('searchUsers')?.value || '').toLowerCase().trim();
+      let data = usersData.slice();
+
+      if (search) {
+        data = data.filter(u =>
+          [u.name, u.stanowisko, u.login, u.email].filter(Boolean).join(' ').toLowerCase().includes(search)
+        );
+      }
+
+      if (usersSortCol) {
+        data.sort((a, b) => {
+          let va, vb;
+          if (usersSortCol === 'left') {
+            va = Math.max(((Number(a.urlop_wymiar)||0)+(Number(a.urlop_zalegly)||0))-(Number(a.urlop_wykorzystany)||0), 0);
+            vb = Math.max(((Number(b.urlop_wymiar)||0)+(Number(b.urlop_zalegly)||0))-(Number(b.urlop_wykorzystany)||0), 0);
+          } else if (usersSortCol === 'waznosc_badan') {
+            va = a.waznosc_badan ? new Date(a.waznosc_badan).getTime() : Infinity;
+            vb = b.waznosc_badan ? new Date(b.waznosc_badan).getTime() : Infinity;
+          } else {
+            va = a[usersSortCol] ?? '';
+            vb = b[usersSortCol] ?? '';
+          }
+          if (typeof va === 'string') va = va.toLowerCase();
+          if (typeof vb === 'string') vb = vb.toLowerCase();
+          return va < vb ? -usersSortDir : va > vb ? usersSortDir : 0;
+        });
+      }
+
       const tbody = document.getElementById('usersTable');
-      if (!data.data.length) {
-        tbody.innerHTML = '<tr><td colspan="12" class="text-center text-muted">Brak pracowników</td></tr>';
+      if (!data.length) {
+        tbody.innerHTML = `<tr><td colspan="12" class="text-center text-muted py-3">${search ? `Brak wyników dla „${search}"` : 'Brak pracowników'}</td></tr>`;
         return;
       }
-      tbody.innerHTML = data.data.map(u => {
+      tbody.innerHTML = data.map(u => {
         const total    = (Number(u.urlop_wymiar)||0) + (Number(u.urlop_zalegly)||0);
         const used     = Number(u.urlop_wykorzystany)||0;
         const left     = Math.max(total - used, 0);
@@ -1300,20 +1356,22 @@
 
       // Filtr stanowisk
       const filterStan = document.getElementById('calFilterStanowisko').value;
+      const showAllEmployees = document.getElementById('calShowAll')?.checked;
 
-      // Pracownicy z urlopem w rozszerzonym zakresie
-      const activeUsers = calUsers.filter(u =>
-        (!filterStan || u.stanowisko === filterStan) &&
-        calRequests.some(r =>
+      // Pracownicy — gdy toggle "wszyscy" aktywny, pokaż wszystkich (bez filtra urlopów)
+      const activeUsers = calUsers.filter(u => {
+        if (filterStan && u.stanowisko !== filterStan) return false;
+        if (showAllEmployees) return true;
+        return calRequests.some(r =>
           Number(r.user_id) === Number(u.id) &&
           (r.status === 'approved' || r.status === 'pending') &&
           String(r.start_date).slice(0,10) <= extEndStr &&
           String(r.end_date).slice(0,10)   >= extStartStr
-        )
-      );
+        );
+      });
 
       if (!activeUsers.length) {
-        body.innerHTML = `<tr><td colspan="${allDays.length + 3}" class="text-center text-muted py-4">Brak urlopów w tym miesiącu</td></tr>`;
+        body.innerHTML = `<tr><td colspan="${allDays.length + 3}" class="text-center text-muted py-4">${showAllEmployees ? 'Brak pracowników' : 'Brak urlopów w tym miesiącu'}</td></tr>`;
         return;
       }
 
