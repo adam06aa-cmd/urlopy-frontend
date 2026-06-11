@@ -958,7 +958,8 @@
 
       const tbody = document.getElementById('usersTable');
       if (!data.length) {
-        tbody.innerHTML = `<tr><td colspan="12" class="text-center text-muted py-3">${search ? `Brak wyników dla „${search}"` : 'Brak pracowników'}</td></tr>`;
+        const emptyMsg = search ? 'Brak wyników dla: ' + search : 'Brak pracowników';
+        tbody.innerHTML = '<tr><td colspan="12" class="text-center text-muted py-3">' + emptyMsg + '</td></tr>';
         return;
       }
       tbody.innerHTML = data.map(u => {
