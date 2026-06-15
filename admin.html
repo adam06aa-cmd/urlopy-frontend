@@ -52,10 +52,11 @@
 
       <!-- ===== WNIOSKI ===== -->
       <div class="tab-pane fade show active" id="tabRequests">
-        <div class="d-flex justify-content-between align-items-center mb-3">
+        <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
           <h5 class="mb-0">Wnioski urlopowe</h5>
-          <div class="d-flex gap-2 align-items-center">
-            <select id="filterStatus" class="form-select form-select-sm w-auto">
+          <div class="d-flex gap-2 align-items-center flex-wrap">
+            <input type="search" id="searchRequests" class="form-control form-control-sm" placeholder="&#128269; Szukaj pracownika..." style="width:210px" oninput="renderRequests()">
+            <select id="filterStatus" class="form-select form-select-sm w-auto" onchange="renderRequests()">
               <option value="">Wszystkie</option>
               <option value="pending">Oczekujące</option>
               <option value="approved">Zatwierdzone</option>
@@ -776,13 +777,21 @@
     // ---- WNIOSKI ----
     function renderRequests() {
       const filter = document.getElementById('filterStatus').value;
-      const filtered = (filter ? allRequests.filter(r => r.status === filter) : allRequests)
-        .slice()
-        .sort((a, b) => String(a.start_date).localeCompare(String(b.start_date)));
+      const search = (document.getElementById('searchRequests')?.value || '').toLowerCase().trim();
+      let filtered = filter ? allRequests.filter(r => r.status === filter) : allRequests;
+      if (search) {
+        filtered = filtered.filter(r =>
+          (r.user_name || '').toLowerCase().includes(search) ||
+          (r.typ_urlopu || '').toLowerCase().includes(search) ||
+          (r.reason || '').toLowerCase().includes(search)
+        );
+      }
+      filtered = filtered.slice().sort((a, b) => String(b.created_at).localeCompare(String(a.created_at)));
       document.getElementById('badgePending').textContent = allRequests.filter(r => r.status === 'pending').length;
       const tbody = document.getElementById('requestsTable');
       if (!filtered.length) {
-        tbody.innerHTML = '<tr><td colspan="9" class="text-center text-muted">Brak wniosków</td></tr>';
+        const msg = search ? 'Brak wyników dla: ' + search : 'Brak wniosków';
+        tbody.innerHTML = '<tr><td colspan="9" class="text-center text-muted">' + msg + '</td></tr>';
         return;
       }
       tbody.innerHTML = filtered.map(r => `
@@ -832,7 +841,6 @@
       else { showAlert('alertRequests', data.message || 'Błąd podczas zatwierdzania', 'danger'); }
     });
 
-    document.getElementById('filterStatus').addEventListener('change', renderRequests);
 
     // ---- EDYCJA WNIOSKU ----
     async function openEditRequest(r) {
@@ -1304,9 +1312,9 @@
       const monthStartStr = `${calYear}-${String(calMonth+1).padStart(2,'0')}-01`;
       const monthEndStr   = `${calYear}-${String(calMonth+1).padStart(2,'0')}-${String(daysInMonth).padStart(2,'0')}`;
 
-      // Rozszerzony zakres: 3 dni przed i po miesiącu
-      const extStart = new Date(Date.UTC(calYear, calMonth, -2));   // 3 dni przed
-      const extEnd   = new Date(Date.UTC(calYear, calMonth + 1, 3)); // 3 dni po
+      // 1 dzień z poprzedniego i 1 dzień z następnego miesiąca
+      const extStart = new Date(Date.UTC(calYear, calMonth, 0));
+      const extEnd   = new Date(Date.UTC(calYear, calMonth + 1, 1));
 
       // Tablica wszystkich dni do wyświetlenia
       const allDays = [];
@@ -1344,9 +1352,8 @@
         if (!isCurrent)        { bg = '#ececec'; color = '#aaa'; }
         else if (isWE || isHol){ bg = '#e9ecef'; color = '#999'; }
         else                   { bg = '#fff';    color = '#333'; }
-        const sep = !isCurrent && dateStr === monthStartStr ? 'border-left:2px solid #aaa;' : '';
-        headHtml += `<th style="min-width:30px;max-width:30px;width:30px;text-align:center;background:${bg};color:${color};font-size:11px;padding:2px 1px;border-bottom:2px solid #dee2e6;${sep}">
-          ${d}<br><span style="font-size:9px">${DAY_SHORT[dow]}</span>
+        headHtml += `<th style="min-width:26px;max-width:26px;width:26px;text-align:center;background:${bg};color:${color};font-size:10px;padding:2px 0;border-bottom:2px solid #dee2e6;">
+          ${d}<br><span style="font-size:8px">${DAY_SHORT[dow]}</span>
         </th>`;
       });
       headHtml += '<th style="position:sticky;right:0;z-index:3;background:#f8f9fa;min-width:90px;text-align:center;border-left:2px solid #dee2e6;font-size:12px">Dni w mies.</th>';
@@ -1438,7 +1445,7 @@
           }
 
           const sep   = dateStr === monthStartStr ? 'border-left:2px solid #aaa;' : '';
-          const style = `background:${cellBg};opacity:${opacity};${border};${sep};padding:0;width:30px;min-width:30px;max-width:30px`;
+          const style = `background:${cellBg};opacity:${opacity};${border};${sep};padding:0;width:26px;min-width:26px;max-width:26px`;
           rowHtml += `<td style="${style}" title="${title}"></td>`;
         });
 
