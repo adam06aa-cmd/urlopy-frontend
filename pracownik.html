@@ -188,7 +188,7 @@
       const data = await API.getRequests();
       if (!data.success) return;
       myRequests = data.data;
-      const sorted = data.data.slice().sort((a, b) => String(b.created_at).localeCompare(String(a.created_at)));
+      const sorted = data.data.slice().sort((a, b) => (b.id - a.id));
       const tbody = document.getElementById('requestsTable');
       if (!sorted.length) {
         tbody.innerHTML = '<tr><td colspan="7" class="text-center text-muted py-4">Nie złożyłeś jeszcze żadnego wniosku</td></tr>';

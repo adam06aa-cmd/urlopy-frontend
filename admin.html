@@ -786,7 +786,7 @@
           (r.reason || '').toLowerCase().includes(search)
         );
       }
-      filtered = filtered.slice().sort((a, b) => String(b.created_at).localeCompare(String(a.created_at)));
+      filtered = filtered.slice().sort((a, b) => (b.id - a.id));
       document.getElementById('badgePending').textContent = allRequests.filter(r => r.status === 'pending').length;
       const tbody = document.getElementById('requestsTable');
       if (!filtered.length) {
