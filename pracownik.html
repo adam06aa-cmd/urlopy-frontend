@@ -215,7 +215,7 @@
       leaveTypesData = data.data;
       const sel = document.getElementById('reqTyp');
       sel.innerHTML = data.data
-        .filter(t => t.aktywny)
+        .filter(t => t.aktywny && !t.ukryj_u_pracownika)
         .map(t => `<option value="${t.kod}">${t.nazwa}${t.limit_dni ? ` (max ${t.limit_dni} dni/rok)` : ''}</option>`)
         .join('');
     }

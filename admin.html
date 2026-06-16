@@ -224,6 +224,7 @@
                         <th>Limit dni</th>
                         <th>Aktywny</th>
                         <th class="text-center">Ukryj w XLSX</th>
+                        <th class="text-center">Ukryj u pracownika</th>
                         <th>Akcje</th>
                       </tr>
                     </thead>
@@ -670,6 +671,10 @@
               <div class="form-check">
                 <input class="form-check-input" type="checkbox" id="ltUkryj">
                 <label class="form-check-label" for="ltUkryj">Ukryj w zestawieniu XLSX</label>
+              </div>
+              <div class="form-check">
+                <input class="form-check-input" type="checkbox" id="ltUkryjPracownik">
+                <label class="form-check-label" for="ltUkryjPracownik">Ukryj u pracownika</label>
               </div>
             </div>
           </div>
@@ -1201,7 +1206,7 @@
       if (!data.success) return;
       const tbody = document.getElementById('leaveTypesTable');
       if (!data.data.length) {
-        tbody.innerHTML = '<tr><td colspan="8" class="text-center text-muted">Brak rodzajów urlopów</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="10" class="text-center text-muted">Brak rodzajów urlopów</td></tr>';
         return;
       }
       tbody.innerHTML = data.data.map(t => `
@@ -1217,6 +1222,7 @@
           <td>${t.limit_dni != null ? `${t.limit_dni} dni` : '<span class="text-muted">Bez limitu</span>'}</td>
           <td>${t.aktywny ? '<span class="badge bg-success">Tak</span>' : '<span class="badge bg-secondary">Nie</span>'}</td>
           <td class="text-center">${t.ukryj_w_zestawieniu ? '<span class="badge bg-warning text-dark">Ukryty</span>' : '<span class="text-muted">–</span>'}</td>
+          <td class="text-center">${t.ukryj_u_pracownika ? '<span class="badge bg-danger">Ukryty</span>' : '<span class="text-muted">–</span>'}</td>
           <td>
             <button class="btn btn-outline-primary btn-sm me-1" onclick='openEditLeaveType(${JSON.stringify(t)})'>Edytuj</button>
             <button class="btn btn-outline-danger btn-sm" onclick="removeLeaveType(${t.id},'${t.nazwa}')">Usuń</button>
@@ -1237,7 +1243,8 @@
       document.getElementById('ltPlatny').checked  = true;
       document.getElementById('ltWlicza').checked  = true;
       document.getElementById('ltAktywny').checked = true;
-      document.getElementById('ltUkryj').checked   = false;
+      document.getElementById('ltUkryj').checked          = false;
+      document.getElementById('ltUkryjPracownik').checked = false;
       new bootstrap.Modal(document.getElementById('modalLeaveType')).show();
     }
 
@@ -1253,7 +1260,8 @@
       document.getElementById('ltPlatny').checked  = t.platny;
       document.getElementById('ltWlicza').checked  = t.wlicza_w_podstawe;
       document.getElementById('ltAktywny').checked = t.aktywny;
-      document.getElementById('ltUkryj').checked   = !!t.ukryj_w_zestawieniu;
+      document.getElementById('ltUkryj').checked          = !!t.ukryj_w_zestawieniu;
+      document.getElementById('ltUkryjPracownik').checked = !!t.ukryj_u_pracownika;
       new bootstrap.Modal(document.getElementById('modalLeaveType')).show();
     }
 
@@ -1267,15 +1275,16 @@
       const wlicza_w_podstawe = document.getElementById('ltWlicza').checked;
       const aktywny             = document.getElementById('ltAktywny').checked;
       const ukryj_w_zestawieniu = document.getElementById('ltUkryj').checked;
+      const ukryj_u_pracownika  = document.getElementById('ltUkryjPracownik').checked;
 
       if (!nazwa) return alert('Podaj nazwę');
 
       let data;
       if (editLeaveTypeId) {
-        data = await API.updateLeaveType(editLeaveTypeId, { nazwa, opis, platny, limit_dni, aktywny, wlicza_w_podstawe, kolor, ukryj_w_zestawieniu });
+        data = await API.updateLeaveType(editLeaveTypeId, { nazwa, opis, platny, limit_dni, aktywny, wlicza_w_podstawe, kolor, ukryj_w_zestawieniu, ukryj_u_pracownika });
       } else {
         if (!kod) return alert('Podaj kod');
-        data = await API.createLeaveType({ nazwa, kod, opis, platny, limit_dni, wlicza_w_podstawe, kolor, ukryj_w_zestawieniu });
+        data = await API.createLeaveType({ nazwa, kod, opis, platny, limit_dni, wlicza_w_podstawe, kolor, ukryj_w_zestawieniu, ukryj_u_pracownika });
       }
 
       bootstrap.Modal.getInstance(document.getElementById('modalLeaveType')).hide();
@@ -1639,13 +1648,14 @@
         empSel.innerHTML = '<option value="">Wszyscy pracownicy</option>' +
           reportData.map(e => `<option value="${e.id}"${String(e.id) === selEmpId ? ' selected' : ''}>${e.name}</option>`).join('');
       }
+      const visibleLts = reportLeaveTypes.filter(lt => !lt.ukryj_u_pracownika);
       if (typeSel) {
         typeSel.innerHTML = '<option value="">Wszystkie typy urlopu</option>' +
-          reportLeaveTypes.map(lt => `<option value="${lt.kod}"${lt.kod === selTypeKod ? ' selected' : ''}>${lt.nazwa}</option>`).join('');
+          visibleLts.map(lt => `<option value="${lt.kod}"${lt.kod === selTypeKod ? ' selected' : ''}>${lt.nazwa}</option>`).join('');
       }
 
-      // Kolumny — jeśli wybrany typ, tylko ten; inaczej wszystkie
-      const lts = selTypeKod ? reportLeaveTypes.filter(lt => lt.kod === selTypeKod) : reportLeaveTypes;
+      // Kolumny — jeśli wybrany typ, tylko ten; inaczej wszystkie widoczne
+      const lts = selTypeKod ? visibleLts.filter(lt => lt.kod === selTypeKod) : visibleLts;
 
       // Wiersze — filtruj pracownika i typ
       const filtered = reportData.filter(emp => {
@@ -1779,8 +1789,8 @@
       const ltNames = {};
       lts.forEach(lt => { ltNames[lt.kod] = lt.nazwa; });
 
-      // Tylko typy faktycznie wykorzystane i nie ukryte w XLSX
-      const ltsUsed = lts.filter(lt => !lt.ukryj_w_zestawieniu && xlsxData.some(emp => (emp.urlopy[lt.kod] || 0) > 0));
+      // Tylko typy faktycznie wykorzystane i nie ukryte w XLSX ani u pracownika
+      const ltsUsed = lts.filter(lt => !lt.ukryj_w_zestawieniu && !lt.ukryj_u_pracownika && xlsxData.some(emp => (emp.urlopy[lt.kod] || 0) > 0));
 
       const header = ['Pracownik', ...ltsUsed.map(lt => lt.nazwa), 'Razem', 'Konkretne dni urlopu'];
 
