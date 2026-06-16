@@ -803,7 +803,10 @@
           (r.reason || '').toLowerCase().includes(search)
         );
       }
-      filtered = filtered.slice().sort((a, b) => (b.id - a.id));
+      filtered = filtered.slice().sort((a, b) => {
+        const dateDiff = String(b.start_date).localeCompare(String(a.start_date));
+        return dateDiff !== 0 ? dateDiff : (b.id - a.id);
+      });
       document.getElementById('badgePending').textContent = allRequests.filter(r => r.status === 'pending').length;
       const tbody = document.getElementById('requestsTable');
       if (!filtered.length) {
