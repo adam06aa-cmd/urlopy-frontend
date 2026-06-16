@@ -105,20 +105,20 @@ const API = {
     return res.json();
   },
 
-  async createUser(name, email, password, etat, urlop_wymiar, urlop_zalegly, stanowisko = '', login = '', data_zatrudnienia = null, data_badan = null, waznosc_badan = null) {
+  async createUser(name, email, password, etat, urlop_wymiar, urlop_zalegly, stanowisko = '', login = '', data_zatrudnienia = null, data_badan = null, waznosc_badan = null, pesel = null) {
     const res = await fetch(`${API_URL}/users`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${localStorage.getItem('token')}` },
-      body: JSON.stringify({ name, email, password, etat, urlop_wymiar, urlop_zalegly, stanowisko, login: login || null, data_zatrudnienia, data_badan, waznosc_badan })
+      body: JSON.stringify({ name, email, password, etat, urlop_wymiar, urlop_zalegly, stanowisko, login: login || null, data_zatrudnienia, data_badan, waznosc_badan, pesel })
     });
     return res.json();
   },
 
-  async updateUser(id, name, email, new_password, stanowisko = '', login = '', data_zatrudnienia = null, data_badan = null, waznosc_badan = null) {
+  async updateUser(id, name, email, new_password, stanowisko = '', login = '', data_zatrudnienia = null, data_badan = null, waznosc_badan = null, pesel = null) {
     const res = await fetch(`${API_URL}/users/${id}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${localStorage.getItem('token')}` },
-      body: JSON.stringify({ name, email, stanowisko, login: login || null, new_password: new_password || undefined, data_zatrudnienia, data_badan, waznosc_badan })
+      body: JSON.stringify({ name, email, stanowisko, login: login || null, new_password: new_password || undefined, data_zatrudnienia, data_badan, waznosc_badan, pesel })
     });
     return res.json();
   },
@@ -204,6 +204,26 @@ const API = {
     const res = await fetch(`${API_URL}/leave-types/${id}`, {
       method: 'DELETE',
       headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+    });
+    return res.json();
+  },
+
+  async updateRequestNote(id, admin_note) {
+    const res = await fetch(`${API_URL}/requests/${id}/note`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${localStorage.getItem('token')}` },
+      body: JSON.stringify({ admin_note })
+    });
+    return res.json();
+  },
+
+  async importZLA(file) {
+    const form = new FormData();
+    form.append('plik', file);
+    const res = await fetch(`${API_URL}/import/zla`, {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` },
+      body: form
     });
     return res.json();
   }

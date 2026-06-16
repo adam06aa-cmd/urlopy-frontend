@@ -223,6 +223,7 @@
                         <th>Wlicza w podstawę</th>
                         <th>Limit dni</th>
                         <th>Aktywny</th>
+                        <th class="text-center">Stawka %</th>
                         <th class="text-center">Ukryj w XLSX</th>
                         <th class="text-center">Ukryj u pracownika</th>
                         <th>Akcje</th>
@@ -231,6 +232,25 @@
                     <tbody id="leaveTypesTable"></tbody>
                   </table>
                 </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="col-12">
+            <div class="card">
+              <div class="card-header">
+                <h6 class="mb-0">Import zwolnień lekarskich (e-ZLA)</h6>
+              </div>
+              <div class="card-body">
+                <p class="text-muted small mb-2">
+                  Wgraj plik XML pobrany z PUE ZUS (raport cykliczny e-ZLA). System dopasuje zwolnienia do pracowników po numerze PESEL i automatycznie doda je jako zatwierdzone wnioski urlopowe (typ: <code>zla</code>).
+                </p>
+                <div id="alertZlaImport" class="alert d-none mb-3"></div>
+                <div class="d-flex align-items-center gap-2 flex-wrap">
+                  <input type="file" id="zlaFile" accept=".xml" class="form-control" style="max-width:340px">
+                  <button class="btn btn-primary" onclick="importZLA()">Importuj</button>
+                </div>
+                <div id="zlaResults" class="mt-3"></div>
               </div>
             </div>
           </div>
@@ -313,6 +333,10 @@
             <input type="text" id="newUserStanowisko" class="form-control" placeholder="np. Trener, Recepcjonista">
           </div>
           <div class="mb-2">
+            <label class="form-label">PESEL <span class="text-muted small">(opcjonalne — wymagane do importu ZLA)</span></label>
+            <input type="text" id="newUserPesel" class="form-control" placeholder="11 cyfr" maxlength="11" autocomplete="off">
+          </div>
+          <div class="mb-2">
             <label class="form-label">Data zatrudnienia</label>
             <input type="date" id="newUserDataZatrudnienia" class="form-control">
           </div>
@@ -380,6 +404,10 @@
           <div class="mb-2">
             <label class="form-label">Stanowisko</label>
             <input type="text" id="editUserStanowisko" class="form-control" placeholder="np. Trener, Recepcjonista">
+          </div>
+          <div class="mb-2">
+            <label class="form-label">PESEL <span class="text-muted small">(opcjonalne — wymagane do importu ZLA)</span></label>
+            <input type="text" id="editUserPesel" class="form-control" placeholder="11 cyfr" maxlength="11" autocomplete="off">
           </div>
           <div class="mb-2">
             <label class="form-label">Data zatrudnienia</label>
@@ -649,12 +677,20 @@
               <span class="text-muted small">Wybierz kolor wyświetlany w kalendarzu</span>
             </div>
           </div>
-          <div class="row">
+          <div class="row mb-2">
             <div class="col">
               <label class="form-label">Limit dni / rok</label>
               <input type="number" id="ltLimit" class="form-control" placeholder="bez limitu" min="1">
               <div class="form-text">Pozostaw puste = bez limitu</div>
             </div>
+            <div class="col">
+              <label class="form-label">Stawka wynagrodzenia (%)</label>
+              <input type="number" id="ltStawka" class="form-control" value="80" min="0" max="100">
+              <div class="form-text">np. 80, 100 — do wyliczeń płacowych</div>
+            </div>
+          </div>
+          <div class="row">
+            <div class="col d-none"></div>
             <div class="col d-flex flex-column gap-2 justify-content-end pb-1">
               <div class="form-check">
                 <input class="form-check-input" type="checkbox" id="ltPlatny" checked>
@@ -1050,6 +1086,7 @@
       const login             = document.getElementById('newUserLogin').value.trim();
       const password          = document.getElementById('newUserPassword').value;
       const stanowisko        = document.getElementById('newUserStanowisko').value.trim();
+      const pesel             = document.getElementById('newUserPesel').value.trim() || null;
       const data_zatrudnienia = document.getElementById('newUserDataZatrudnienia').value || null;
       const data_badan        = document.getElementById('newUserDataBadan').value || null;
       const waznosc_badan     = document.getElementById('newUserWaznoscBadan').value || null;
@@ -1057,7 +1094,7 @@
       const wymiar            = parseInt(document.getElementById('newUserWymiar').value)||26;
       const zalegly           = parseInt(document.getElementById('newUserZalegly').value)||0;
       if (!name||!password) return alert('Wypełnij imię i nazwisko oraz hasło');
-      const data = await API.createUser(name, email, password, etat, wymiar, zalegly, stanowisko, login, data_zatrudnienia, data_badan, waznosc_badan);
+      const data = await API.createUser(name, email, password, etat, wymiar, zalegly, stanowisko, login, data_zatrudnienia, data_badan, waznosc_badan, pesel);
       bootstrap.Modal.getInstance(document.getElementById('modalAddUser')).hide();
       if (data.success) { loadUsers(); showAlert('alertUsers', data.message, 'success'); }
       else { showAlert('alertUsers', data.message, 'danger'); }
@@ -1072,6 +1109,7 @@
       document.getElementById('editUserEmail').value                = u.email;
       document.getElementById('editUserLogin').value                = u.login || '';
       document.getElementById('editUserStanowisko').value           = u.stanowisko || '';
+      document.getElementById('editUserPesel').value               = u.pesel || '';
       document.getElementById('editUserDataZatrudnienia').value     = u.data_zatrudnienia ? String(u.data_zatrudnienia).slice(0,10) : '';
       document.getElementById('editUserDataBadan').value            = u.data_badan ? String(u.data_badan).slice(0,10) : '';
       document.getElementById('editUserWaznoscBadan').value         = u.waznosc_badan ? String(u.waznosc_badan).slice(0,10) : '';
@@ -1091,6 +1129,7 @@
       const email             = document.getElementById('editUserEmail').value.trim();
       const login             = document.getElementById('editUserLogin').value.trim();
       const stanowisko        = document.getElementById('editUserStanowisko').value.trim();
+      const pesel             = document.getElementById('editUserPesel').value.trim() || null;
       const data_zatrudnienia = document.getElementById('editUserDataZatrudnienia').value || null;
       const data_badan        = document.getElementById('editUserDataBadan').value || null;
       const waznosc_badan     = document.getElementById('editUserWaznoscBadan').value || null;
@@ -1102,7 +1141,7 @@
 
       const exportExcel = document.getElementById('editExportExcel').checked;
       const [d1, d2] = await Promise.all([
-        API.updateUser(editUserId, name, email, password || null, stanowisko, login, data_zatrudnienia, data_badan, waznosc_badan),
+        API.updateUser(editUserId, name, email, password || null, stanowisko, login, data_zatrudnienia, data_badan, waznosc_badan, pesel),
         API.updateUserLeave(editUserId, etat, wymiar, zalegly)
       ]);
       await API.toggleExcel(editUserId, exportExcel);
@@ -1206,7 +1245,7 @@
       if (!data.success) return;
       const tbody = document.getElementById('leaveTypesTable');
       if (!data.data.length) {
-        tbody.innerHTML = '<tr><td colspan="10" class="text-center text-muted">Brak rodzajów urlopów</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="11" class="text-center text-muted">Brak rodzajów urlopów</td></tr>';
         return;
       }
       tbody.innerHTML = data.data.map(t => `
@@ -1221,6 +1260,7 @@
           <td>${t.wlicza_w_podstawe ? '<span class="badge bg-primary">Podstawowy</span>' : '<span class="badge bg-warning text-dark">Dodatkowy</span>'}</td>
           <td>${t.limit_dni != null ? `${t.limit_dni} dni` : '<span class="text-muted">Bez limitu</span>'}</td>
           <td>${t.aktywny ? '<span class="badge bg-success">Tak</span>' : '<span class="badge bg-secondary">Nie</span>'}</td>
+          <td class="text-center"><span class="badge bg-secondary">${t.stawka_procentowa != null ? t.stawka_procentowa + '%' : '80%'}</span></td>
           <td class="text-center">${t.ukryj_w_zestawieniu ? '<span class="badge bg-warning text-dark">Ukryty</span>' : '<span class="text-muted">–</span>'}</td>
           <td class="text-center">${t.ukryj_u_pracownika ? '<span class="badge bg-danger">Ukryty</span>' : '<span class="text-muted">–</span>'}</td>
           <td>
@@ -1243,6 +1283,7 @@
       document.getElementById('ltPlatny').checked  = true;
       document.getElementById('ltWlicza').checked  = true;
       document.getElementById('ltAktywny').checked = true;
+      document.getElementById('ltStawka').value           = 80;
       document.getElementById('ltUkryj').checked          = false;
       document.getElementById('ltUkryjPracownik').checked = false;
       new bootstrap.Modal(document.getElementById('modalLeaveType')).show();
@@ -1260,6 +1301,7 @@
       document.getElementById('ltPlatny').checked  = t.platny;
       document.getElementById('ltWlicza').checked  = t.wlicza_w_podstawe;
       document.getElementById('ltAktywny').checked = t.aktywny;
+      document.getElementById('ltStawka').value            = t.stawka_procentowa ?? 80;
       document.getElementById('ltUkryj').checked          = !!t.ukryj_w_zestawieniu;
       document.getElementById('ltUkryjPracownik').checked = !!t.ukryj_u_pracownika;
       new bootstrap.Modal(document.getElementById('modalLeaveType')).show();
@@ -1274,6 +1316,7 @@
       const platny           = document.getElementById('ltPlatny').checked;
       const wlicza_w_podstawe = document.getElementById('ltWlicza').checked;
       const aktywny             = document.getElementById('ltAktywny').checked;
+      const stawka_procentowa   = parseInt(document.getElementById('ltStawka').value) || 80;
       const ukryj_w_zestawieniu = document.getElementById('ltUkryj').checked;
       const ukryj_u_pracownika  = document.getElementById('ltUkryjPracownik').checked;
 
@@ -1281,10 +1324,10 @@
 
       let data;
       if (editLeaveTypeId) {
-        data = await API.updateLeaveType(editLeaveTypeId, { nazwa, opis, platny, limit_dni, aktywny, wlicza_w_podstawe, kolor, ukryj_w_zestawieniu, ukryj_u_pracownika });
+        data = await API.updateLeaveType(editLeaveTypeId, { nazwa, opis, platny, limit_dni, aktywny, wlicza_w_podstawe, kolor, stawka_procentowa, ukryj_w_zestawieniu, ukryj_u_pracownika });
       } else {
         if (!kod) return alert('Podaj kod');
-        data = await API.createLeaveType({ nazwa, kod, opis, platny, limit_dni, wlicza_w_podstawe, kolor, ukryj_w_zestawieniu, ukryj_u_pracownika });
+        data = await API.createLeaveType({ nazwa, kod, opis, platny, limit_dni, wlicza_w_podstawe, kolor, stawka_procentowa, ukryj_w_zestawieniu, ukryj_u_pracownika });
       }
 
       bootstrap.Modal.getInstance(document.getElementById('modalLeaveType')).hide();
@@ -1960,6 +2003,59 @@
     document.querySelector('[href="#tabCalendar"]').addEventListener('shown.bs.tab', loadCalendar);
     document.querySelector('[href="#tabReport"]').addEventListener('shown.bs.tab', loadReport);
 
+    // ---- IMPORT ZLA ----
+    async function importZLA() {
+      const fileInput = document.getElementById('zlaFile');
+      const alertEl   = document.getElementById('alertZlaImport');
+      const resultsEl = document.getElementById('zlaResults');
+
+      if (!fileInput.files.length) {
+        alertEl.className = 'alert alert-warning';
+        alertEl.textContent = 'Wybierz plik XML';
+        return;
+      }
+
+      alertEl.className = 'alert alert-info';
+      alertEl.textContent = 'Importowanie...';
+      resultsEl.innerHTML = '';
+
+      const data = await API.importZLA(fileInput.files[0]);
+
+      if (!data.success) {
+        alertEl.className = 'alert alert-danger';
+        alertEl.textContent = data.message || 'Błąd importu';
+        return;
+      }
+
+      alertEl.className = 'alert alert-success';
+      alertEl.textContent = data.message;
+
+      const SERIA_OPIS = { ZA:'wypadek/choroba zawodowa', ZB:'alkohol', ZC:'choroba', ZD:'opieka', ZE:'choroba w ciąży', ZF:'po porodzie' };
+      const statusClass = { zaimportowano:'success', pominięto:'warning', błąd:'danger', 'brak PESEL':'secondary' };
+
+      resultsEl.innerHTML = `
+        <table class="table table-sm table-bordered mt-2">
+          <thead class="table-light">
+            <tr><th>Pracownik</th><th>Od</th><th>Do</th><th>Dni</th><th>Seria</th><th>Nr ZLA</th><th>Status</th></tr>
+          </thead>
+          <tbody>
+            ${data.wyniki.map(w => `
+              <tr>
+                <td>${w.label}</td>
+                <td>${w.dataOd || '–'}</td>
+                <td>${w.dataDo || '–'}</td>
+                <td>${w.dniRobocze != null ? w.dniRobocze : '–'}</td>
+                <td>${w.seria ? `<span class="badge bg-info text-dark" title="${SERIA_OPIS[w.seria]||''}">${w.seria}</span>` : '–'}</td>
+                <td><small>${w.numerZla || '–'}</small></td>
+                <td><span class="badge bg-${statusClass[w.status]||'secondary'}">${w.status}</span>${w.powod ? ` <small class="text-muted">${w.powod}</small>` : ''}</td>
+              </tr>`).join('')}
+          </tbody>
+        </table>`;
+
+      fileInput.value = '';
+      if (data.zaimportowano > 0) loadRequests();
+    }
+
     async function loadNotificationEmails() {
       try {
         const res = await fetch(`${API_URL}/settings`, { headers: { Authorization: `Bearer ${localStorage.getItem('token')}` } });
@@ -1992,7 +2088,7 @@
     }
 
     document.getElementById('modalAddUser').addEventListener('show.bs.modal', () => {
-      ['newUserName','newUserEmail','newUserLogin','newUserPassword','newUserStanowisko',
+      ['newUserName','newUserEmail','newUserLogin','newUserPassword','newUserStanowisko','newUserPesel',
        'newUserDataZatrudnienia','newUserDataBadan','newUserWaznoscBadan'].forEach(id => {
         const el = document.getElementById(id);
         if (el) el.value = '';
