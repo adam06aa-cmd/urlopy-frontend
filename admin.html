@@ -56,8 +56,13 @@
           <h5 class="mb-0">Wnioski urlopowe</h5>
           <div class="d-flex gap-2 align-items-center flex-wrap">
             <input type="search" id="searchRequests" class="form-control form-control-sm" placeholder="&#128269; Szukaj pracownika..." style="width:210px" oninput="renderRequests()">
+            <select id="filterPeriod" class="form-select form-select-sm w-auto" onchange="renderRequests()">
+              <option value="">Cały okres</option>
+              <option value="month" selected>Ten miesiąc</option>
+              <option value="year">Ten rok</option>
+            </select>
             <select id="filterStatus" class="form-select form-select-sm w-auto" onchange="renderRequests()">
-              <option value="">Wszystkie</option>
+              <option value="">Wszystkie statusy</option>
               <option value="pending">Oczekujące</option>
               <option value="approved">Zatwierdzone</option>
               <option value="rejected">Odrzucone</option>
@@ -776,9 +781,21 @@
 
     // ---- WNIOSKI ----
     function renderRequests() {
-      const filter = document.getElementById('filterStatus').value;
+      const filterStatus = document.getElementById('filterStatus').value;
+      const filterPeriod = document.getElementById('filterPeriod').value;
       const search = (document.getElementById('searchRequests')?.value || '').toLowerCase().trim();
-      let filtered = filter ? allRequests.filter(r => r.status === filter) : allRequests;
+      let filtered = filterStatus ? allRequests.filter(r => r.status === filterStatus) : allRequests;
+      if (filterPeriod) {
+        const now = new Date();
+        const year = now.getFullYear();
+        const month = String(now.getMonth() + 1).padStart(2, '0');
+        filtered = filtered.filter(r => {
+          const d = String(r.start_date).slice(0, 10);
+          if (filterPeriod === 'year')  return d.startsWith(String(year));
+          if (filterPeriod === 'month') return d.startsWith(`${year}-${month}`);
+          return true;
+        });
+      }
       if (search) {
         filtered = filtered.filter(r =>
           (r.user_name || '').toLowerCase().includes(search) ||
